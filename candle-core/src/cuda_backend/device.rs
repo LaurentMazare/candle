@@ -77,7 +77,7 @@ impl CudaDevice {
         self.id
     }
 
-    fn const_impl(&self, v: f64, shape: &Shape, dtype: DType) -> Result<CudaStorage> {
+    pub fn const_impl(&self, v: f64, shape: &Shape, dtype: DType) -> Result<CudaStorage> {
         let elem_count = shape.elem_count();
         let cfg = LaunchConfig::for_num_elems(elem_count as u32);
         let slice = match dtype {

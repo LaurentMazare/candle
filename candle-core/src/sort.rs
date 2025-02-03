@@ -1,10 +1,12 @@
-use crate::{Result, Tensor};
+use crate::{DType, Result, Shape, Storage, Tensor};
 use rayon::prelude::*;
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct ArgSort {
     asc: bool,
     last_dim: usize,
+    dtype: DType,
+    #[cfg(feature = "cuda")]
+    indices: Tensor,
 }
 
 impl ArgSort {
@@ -56,7 +58,8 @@ impl ArgSort {
 mod cuda {
     use super::*;
     use crate::cuda_backend::cudarc::driver::{
-        CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig, ValidAsZeroBits,
+        result::memcpy_dtod_sync, CudaSlice, DevicePtr, DeviceRepr, LaunchAsync, LaunchConfig,
+        ValidAsZeroBits,
     };
     use crate::cuda_backend::{kernel_name, kernels, CudaStorageSlice as S, WrapErr};
     use crate::{CudaDevice, WithDType};
@@ -74,7 +77,6 @@ mod cuda {
                 Some((o1, o2)) => src.slice(o1..o2),
             };
             let elem_count = layout.shape().elem_count();
-            let dst = unsafe { dev.alloc::<u32>(elem_count) }.w()?;
             let func = if self.asc {
                 dev.get_or_load_func(&kernel_name::<T>("asort_asc"), kernels::SORT)?
             } else {
@@ -82,14 +84,93 @@ mod cuda {
             };
             let ncols = self.last_dim;
             let nrows = elem_count / ncols;
-            let ncols_pad = next_power_of_2(ncols);
-            let params = (&slice, &dst, ncols as i32, ncols_pad as i32);
-            let cfg = LaunchConfig {
-                grid_dim: (1, nrows as u32, 1),
-                block_dim: (ncols_pad as u32, 1, 1),
-                shared_mem_bytes: (ncols_pad * std::mem::size_of::<u32>()) as u32,
+            let (indices, _) = self.indices.storage_and_layout();
+
+            let indices = match &*indices {
+                Storage::Cuda(k) => k.as_cuda_slice::<u32>()?.to_owned(),
+                _ => crate::bail!("indices must be a cuda tensor"),
             };
-            unsafe { func.launch(cfg, params) }.w()?;
+            let dst = unsafe { dev.alloc::<u32>(elem_count) }.w()?;
+
+            //size of each row must be log2-base for bitonic sort
+            let ncols_pad = next_power_of_2(ncols);
+            //alloc temp buffer for paddings
+            let tmp_rows = dev.const_impl(
+                if self.asc {
+                    std::f64::MAX
+                } else {
+                    std::f64::MIN
+                },
+                &Shape::from((nrows, ncols_pad)),
+                self.dtype,
+            )?;
+            let tmp_indices = unsafe { dev.alloc::<u32>(ncols_pad) }.w()?;
+            // Determine the number of threads per block and blocks per row
+            let max_threads_per_block = 1024;
+            let threads_per_block = max_threads_per_block.min(ncols_pad);
+            let blocks_per_row = (ncols_pad + threads_per_block - 1) / threads_per_block;
+
+            let cfg = LaunchConfig {
+                grid_dim: (blocks_per_row as u32, 1, 1),
+                block_dim: (threads_per_block as u32, 1, 1),
+                shared_mem_bytes: (threads_per_block * std::mem::size_of::<u32>()) as u32,
+            };
+
+            unsafe {
+                for row in 0..nrows {
+                    let start_o = row * ncols;
+                    let slice_row = slice.slice(start_o..);
+                    let dst_row = dst.slice(start_o..);
+                    let tmp_row_ptr = match &tmp_rows.slice {
+                        S::U8(inp) => *inp.slice(start_o..).device_ptr(),
+                        S::U32(inp) => *inp.slice(start_o..).device_ptr(),
+                        S::I64(inp) => *inp.slice(start_o..).device_ptr(),
+                        S::BF16(inp) => *inp.slice(start_o..).device_ptr(),
+                        S::F16(inp) => *inp.slice(start_o..).device_ptr(),
+                        S::F32(inp) => *inp.slice(start_o..).device_ptr(),
+                        S::F64(inp) => *inp.slice(start_o..).device_ptr(),
+                    };
+
+                    memcpy_dtod_sync(
+                        tmp_row_ptr,
+                        *slice_row.device_ptr(),
+                        ncols * std::mem::size_of::<T>(),
+                    )
+                    .w()?;
+                    memcpy_dtod_sync(
+                        *tmp_indices.device_ptr(),
+                        *indices.device_ptr(),
+                        ncols * std::mem::size_of::<u32>(),
+                    )
+                    .w()?;
+
+                    let mut k = 2;
+                    while k <= ncols_pad {
+                        // Minor step
+                        let mut j = k >> 1;
+                        while j > 0 {
+                            let params = (tmp_row_ptr, &tmp_indices, j as i32, k as i32);
+                            func.clone().launch(cfg, params).w()?;
+                            j = j >> 1;
+                        }
+                        k <<= 1;
+                    }
+
+                    //copy back valid elements
+                    memcpy_dtod_sync(
+                        *slice_row.device_ptr(),
+                        tmp_row_ptr,
+                        ncols * std::mem::size_of::<T>(),
+                    )
+                    .w()?;
+                    memcpy_dtod_sync(
+                        *dst_row.device_ptr(),
+                        *tmp_indices.device_ptr(),
+                        ncols * std::mem::size_of::<u32>(),
+                    )
+                    .w()?;
+                }
+            }
             Ok(S::U32(dst))
         }
     }
@@ -221,8 +302,18 @@ impl Tensor {
             None => crate::bail!("empty last-dim in arg-sort"),
             Some(last_dim) => *last_dim,
         };
+        #[cfg(feature = "cuda")]
+        let indices_cpu = (0..last_dim).into_iter().map(|a| a as u32).collect();
+        #[cfg(feature = "cuda")]
+        let indices = Tensor::from_vec(indices_cpu, (1, last_dim), self.device())?;
         // No need for a backward pass for arg sort.
-        self.apply_op1_no_bwd(&ArgSort { asc, last_dim })
+        self.apply_op1_no_bwd(&ArgSort {
+            asc,
+            last_dim,
+            dtype: self.dtype(),
+            #[cfg(feature = "cuda")]
+            indices,
+        })
     }
 
     /// Sorts the tensor along the last dimension, returns the sorted tensor together with the
@@ -237,8 +328,8 @@ impl Tensor {
                 op: "sort_last_dim",
             });
         }
-        let asort = self.arg_sort_last_dim(asc)?;
-        let sorted = self.gather(&asort, crate::D::Minus1)?;
+        let sorted = self.copy()?;
+        let asort = sorted.arg_sort_last_dim(asc)?;
         Ok((sorted, asort))
     }
 }
