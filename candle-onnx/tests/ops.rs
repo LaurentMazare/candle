@@ -8,30 +8,16 @@ use candle_onnx::onnx::{AttributeProto, GraphProto, ModelProto, NodeProto, Value
 use candle_onnx::simple_eval;
 use std::collections::HashMap;
 
+mod utils;
+
 const INPUT_X: &str = "x";
 const INPUT_Y: &str = "y";
 const INPUT_A: &str = "a";
 const OUTPUT_Z: &str = "z";
 
-fn create_model_proto_with_graph(graph: Option<GraphProto>) -> ModelProto {
-    ModelProto {
-        metadata_props: vec![],
-        training_info: vec![],
-        functions: vec![],
-        ir_version: 0,
-        opset_import: vec![],
-        producer_name: "".to_string(),
-        producer_version: "".to_string(),
-        domain: "".to_string(),
-        model_version: 0,
-        doc_string: "".to_string(),
-        graph,
-    }
-}
-
 #[test]
 fn test_evaluation_fails_without_defined_graph() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(None);
+    let manual_graph = utils::create_model_proto_with_graph(None);
     let inputs: HashMap<String, Tensor> = HashMap::new();
     match candle_onnx::simple_eval(&manual_graph, inputs) {
         Err(err) => assert_eq!(err.to_string(), "no graph defined in proto"),
@@ -43,7 +29,7 @@ fn test_evaluation_fails_without_defined_graph() -> Result<()> {
 // "Add"
 #[test]
 fn test_add_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Add".to_string(),
             domain: "".to_string(),
@@ -83,7 +69,7 @@ fn test_add_operation() -> Result<()> {
 // "Sub"
 #[test]
 fn test_sub_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Sub".to_string(),
             domain: "".to_string(),
@@ -123,7 +109,7 @@ fn test_sub_operation() -> Result<()> {
 // "Mul"
 #[test]
 fn test_mul_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Mul".to_string(),
             domain: "".to_string(),
@@ -163,7 +149,7 @@ fn test_mul_operation() -> Result<()> {
 // "Div"
 #[test]
 fn test_div_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Div".to_string(),
             domain: "".to_string(),
@@ -203,7 +189,7 @@ fn test_div_operation() -> Result<()> {
 // "Exp"
 #[test]
 fn test_exp_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Exp".to_string(),
             domain: "".to_string(),
@@ -249,7 +235,7 @@ fn test_exp_operation() -> Result<()> {
 // "Equal"
 #[test]
 fn test_equal_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Equal".to_string(),
             domain: "".to_string(),
@@ -290,7 +276,7 @@ fn test_equal_operation() -> Result<()> {
 // "Not"
 #[test]
 fn test_not_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Not".to_string(),
             domain: "".to_string(),
@@ -330,7 +316,7 @@ fn test_not_operation() -> Result<()> {
 // "MatMul"
 #[test]
 fn test_matmul_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "MatMul".to_string(),
             domain: "".to_string(),
@@ -387,7 +373,7 @@ fn test_matmul_operation() -> Result<()> {
 // "Reshape"
 #[test]
 fn test_reshape_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Reshape".to_string(),
             domain: "".to_string(),
@@ -454,7 +440,7 @@ fn test_reshape_operation() -> Result<()> {
 // "LogSoftmax"
 #[test]
 fn test_logsoftmax_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "LogSoftmax".to_string(),
             domain: "".to_string(),
@@ -517,7 +503,7 @@ fn test_logsoftmax_operation() -> Result<()> {
 // "Softmax"
 #[test]
 fn test_softmax_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Softmax".to_string(),
             domain: "".to_string(),
@@ -580,7 +566,7 @@ fn test_softmax_operation() -> Result<()> {
 // "Transpose"
 #[test]
 fn test_transpose_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Transpose".to_string(),
             domain: "".to_string(),
@@ -640,7 +626,7 @@ fn test_transpose_operation() -> Result<()> {
 // "Dropout"
 #[test]
 fn test_dropout_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Dropout".to_string(),
             domain: "".to_string(),
@@ -719,7 +705,7 @@ fn test_flatten_operation() -> Result<()> {
         sparse_tensors: vec![],
         type_protos: vec![],
     };
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Flatten".to_string(),
             domain: "".to_string(),
@@ -774,7 +760,7 @@ fn test_flatten_operation() -> Result<()> {
     assert_eq!(results, vec![vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]]);
 
     att_axis.i = 1;
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Flatten".to_string(),
             domain: "".to_string(),
@@ -922,7 +908,7 @@ fn test_constant_of_shape() -> Result<()> {
             })
         }
 
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "ConstantOfShape".to_string(),
                 domain: "".to_string(),
@@ -974,7 +960,7 @@ fn test_constant_of_shape() -> Result<()> {
 // "Unsqueeze"
 #[test]
 fn test_unsqueeze() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Unsqueeze".to_string(),
             domain: "".to_string(),
@@ -1112,7 +1098,7 @@ fn test_gather_operation() -> Result<()> {
             type_protos: vec![],
         };
 
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Gather".to_string(),
                 domain: "".to_string(),
@@ -1269,7 +1255,7 @@ fn test_gather_elements() -> Result<()> {
             type_protos: vec![],
         };
 
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "GatherElements".to_string(),
                 domain: "".to_string(),
@@ -1319,7 +1305,7 @@ fn test_gather_elements() -> Result<()> {
 // "Size"
 #[test]
 fn test_size_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Size".to_string(),
             domain: "".to_string(),
@@ -1364,7 +1350,7 @@ fn test_size_operation() -> Result<()> {
 // "Shape"
 #[test]
 fn test_shape_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Shape".to_string(),
             domain: "".to_string(),
@@ -1415,7 +1401,7 @@ fn test_shape_operation() -> Result<()> {
 // "Abs"
 #[test]
 fn test_abs_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Abs".to_string(),
             domain: "".to_string(),
@@ -1473,7 +1459,7 @@ fn test_abs_operation() -> Result<()> {
 // "Cos"
 #[test]
 fn test_cos_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Cos".to_string(),
             domain: "".to_string(),
@@ -1523,7 +1509,7 @@ fn test_cos_operation() -> Result<()> {
 // "Sin"
 #[test]
 fn test_sin_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Sin".to_string(),
             domain: "".to_string(),
@@ -1570,7 +1556,7 @@ fn test_sin_operation() -> Result<()> {
 // "Neg"
 #[test]
 fn test_neg_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Neg".to_string(),
             domain: "".to_string(),
@@ -1627,7 +1613,7 @@ fn test_neg_operation() -> Result<()> {
 // "Tanh"
 #[test]
 fn test_tanh_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Tanh".to_string(),
             domain: "".to_string(),
@@ -1684,7 +1670,7 @@ fn test_tanh_operation() -> Result<()> {
 // "Sigmoid"
 #[test]
 fn test_sigmoid_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Sigmoid".to_string(),
             domain: "".to_string(),
@@ -1741,7 +1727,7 @@ fn test_sigmoid_operation() -> Result<()> {
 // "Gelu"
 #[test]
 fn test_gelu_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Gelu".to_string(),
             domain: "".to_string(),
@@ -1798,7 +1784,7 @@ fn test_gelu_operation() -> Result<()> {
 // "Relu"
 #[test]
 fn test_relu_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Relu".to_string(),
             domain: "".to_string(),
@@ -2289,7 +2275,7 @@ fn test_reduce_max() -> Result<()> {
             });
         }
 
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "ReduceMax".to_string(),
                 domain: "".to_string(),
@@ -2808,7 +2794,7 @@ fn test_reduce_min() -> Result<()> {
             });
         }
 
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "ReduceMin".to_string(),
                 domain: "".to_string(),
@@ -3016,7 +3002,7 @@ fn test_reduce_mean() -> Result<()> {
             type_protos: vec![],
         };
 
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "ReduceMean".to_string(),
                 domain: "".to_string(),
@@ -3074,7 +3060,7 @@ fn test_sqrt() -> Result<()> {
     test(&[1., 4., 9.], &[1., 2., 3.])?;
 
     fn test(data: impl NdArray, expected: impl NdArray) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Sqrt".to_string(),
                 domain: "".to_string(),
@@ -3220,7 +3206,7 @@ fn test_random_uniform() -> Result<()> {
             }
             mut_attrs
         };
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "RandomUniform".to_string(),
                 domain: "".to_string(),
@@ -3366,7 +3352,7 @@ fn test_random_normal() -> Result<()> {
             }
             mut_attrs
         };
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "RandomNormal".to_string(),
                 domain: "".to_string(),
@@ -3426,7 +3412,7 @@ fn test_range() -> Result<()> {
         delta: impl NdArray,
         expected: impl NdArray,
     ) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Range".to_string(),
                 domain: "".to_string(),
@@ -3492,7 +3478,7 @@ fn test_greater() -> Result<()> {
     test(&[1., 2., 3.], 2., &[0u8, 0, 1])?;
 
     fn test(a: impl NdArray, b: impl NdArray, expected: impl NdArray) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Greater".to_string(),
                 domain: "".to_string(),
@@ -3553,7 +3539,7 @@ fn test_less() -> Result<()> {
     test(&[1., 2., 3.], 2., &[1u8, 0, 0])?;
 
     fn test(a: impl NdArray, b: impl NdArray, expected: impl NdArray) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Less".to_string(),
                 domain: "".to_string(),
@@ -3611,7 +3597,7 @@ fn test_log() -> Result<()> {
     test(&[1., 10.], &[0., std::f64::consts::LN_10])?;
 
     fn test(data: impl NdArray, expected: impl NdArray) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Log".to_string(),
                 domain: "".to_string(),
@@ -3670,7 +3656,7 @@ fn test_min() -> Result<()> {
         c: impl NdArray,
         expected: impl NdArray,
     ) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Min".to_string(),
                 domain: "".to_string(),
@@ -3748,7 +3734,7 @@ fn test_where() -> Result<()> {
         y: impl NdArray,
         expected: impl NdArray,
     ) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Where".to_string(),
                 domain: "".to_string(),
@@ -3806,7 +3792,7 @@ fn test_where() -> Result<()> {
 
 #[test]
 fn test_floor() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Floor".to_string(),
             domain: "".to_string(),
@@ -3882,7 +3868,7 @@ fn test_floor() -> Result<()> {
 
 #[test]
 fn test_ceil() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Ceil".to_string(),
             domain: "".to_string(),
@@ -4097,7 +4083,7 @@ fn test_argmin() -> Result<()> {
             }
             mut_attrs
         };
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "ArgMin".to_string(),
                 domain: "".to_string(),
@@ -4279,7 +4265,7 @@ fn test_argmax() -> Result<()> {
             }
             mut_attrs
         };
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "ArgMax".to_string(),
                 domain: "".to_string(),
@@ -4354,7 +4340,7 @@ fn test_leakyrelu() -> Result<()> {
             }
             mut_attrs
         };
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "LeakyRelu".to_string(),
                 domain: "".to_string(),
@@ -4465,7 +4451,7 @@ fn test_if() -> Result<()> {
         }],
         ..GraphProto::default()
     };
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "If".to_string(),
             attribute: vec![
@@ -4530,7 +4516,7 @@ fn test_pad() -> Result<()> {
         &Device::Cpu,
     )?;
 
-    let model = create_model_proto_with_graph(Some(GraphProto {
+    let model = utils::create_model_proto_with_graph(Some(GraphProto {
         input: vec![
             ValueInfoProto {
                 name: "data".to_string(),
@@ -4572,7 +4558,7 @@ fn test_pad() -> Result<()> {
 
 #[test]
 fn test_slice() -> Result<()> {
-    let model = create_model_proto_with_graph(Some(GraphProto {
+    let model = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Slice".to_string(),
             input: vec![
@@ -4657,7 +4643,7 @@ fn test_slice() -> Result<()> {
         [2, 3, 4],
     ]
     */
-    let model = create_model_proto_with_graph(Some(GraphProto {
+    let model = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Slice".to_string(),
             input: vec!["data".to_string(), "starts".to_string(), "ends".to_string()],
@@ -5074,7 +5060,7 @@ fn test_lstm() -> Result<()> {
     )?;
     // end of generated values
 
-    let model = create_model_proto_with_graph(Some(GraphProto {
+    let model = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "LSTM".to_string(),
             name: "LSTM_test".to_string(),
@@ -5172,7 +5158,7 @@ fn test_lstm() -> Result<()> {
 #[test]
 fn test_expand_dim_changed() -> Result<()> {
     // Create a manual graph for the Expand operation
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+    let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: "Expand".to_string(),
             domain: "".to_string(),
@@ -5241,7 +5227,7 @@ fn make_graph_helper(
     outputs: &[&str],
     attribs: Vec<AttributeProto>,
 ) -> ModelProto {
-    create_model_proto_with_graph(Some(GraphProto {
+    utils::create_model_proto_with_graph(Some(GraphProto {
         node: vec![NodeProto {
             op_type: op_name.to_string(),
             domain: "".to_string(),
@@ -5805,7 +5791,7 @@ fn test_xor() -> Result<()> {
     )?;
 
     fn test(input: impl NdArray, other: impl NdArray, expected: impl NdArray) -> Result<()> {
-        let manual_graph = create_model_proto_with_graph(Some(GraphProto {
+        let manual_graph = utils::create_model_proto_with_graph(Some(GraphProto {
             node: vec![NodeProto {
                 op_type: "Xor".to_string(),
                 domain: "".to_string(),
@@ -5867,46 +5853,5 @@ fn test_xor() -> Result<()> {
 
         Ok(())
     }
-    Ok(())
-}
-
-#[test]
-fn test_sign_operation() -> Result<()> {
-    let manual_graph = create_model_proto_with_graph(Some(GraphProto {
-        node: vec![NodeProto {
-            op_type: "Sign".to_string(),
-            domain: "".to_string(),
-            attribute: vec![],
-            input: vec![INPUT_X.to_string()],
-            output: vec![OUTPUT_Z.to_string()],
-            name: "".to_string(),
-            doc_string: "".to_string(),
-        }],
-        name: "".to_string(),
-        initializer: vec![],
-        input: vec![],
-        output: vec![ValueInfoProto {
-            name: OUTPUT_Z.to_string(),
-            doc_string: "".to_string(),
-            r#type: None,
-        }],
-        value_info: vec![],
-        doc_string: "".to_string(),
-        sparse_initializer: vec![],
-        quantization_annotation: vec![],
-    }));
-
-    let mut inputs: HashMap<String, Tensor> = HashMap::new();
-    inputs.insert(
-        INPUT_X.to_string(),
-        Tensor::new(vec![-2f32, -1., 0., 1., 2.], &Device::Cpu)?,
-    );
-    let eval = candle_onnx::simple_eval(&manual_graph, inputs)?;
-
-    let z = eval.get(OUTPUT_Z).expect("Output 'z' not found");
-    assert_eq!(
-        z.to_dtype(candle::DType::I64)?.to_vec1::<i64>()?.to_vec(),
-        vec![-1, -1, 0, 1, 1]
-    );
     Ok(())
 }
