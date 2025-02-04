@@ -146,6 +146,9 @@ pub enum GgmlDType {
     Q5K,
     Q6K,
     Q8K,
+    Q2b0,
+    Q2b1,
+    QI8,
 }
 
 impl GgmlDType {
@@ -165,6 +168,9 @@ impl GgmlDType {
             13 => Self::Q5K,
             14 => Self::Q6K,
             15 => Self::Q8K,
+            40 => Self::Q2b0,
+            41 => Self::QI8,
+            42 => Self::Q2b1,
             _ => crate::bail!("unknown dtype for tensor {u}"),
         };
         Ok(dtype)
@@ -186,6 +192,9 @@ impl GgmlDType {
             Self::Q5K => 13,
             Self::Q6K => 14,
             Self::Q8K => 15,
+            Self::Q2b0 => 40,
+            Self::QI8 => 41,
+            Self::Q2b1 => 42,
         }
     }
 
@@ -206,6 +215,9 @@ impl GgmlDType {
             Self::Q5K => Box::new(vec![BlockQ5K::zeros(); elem_count / BlockQ5K::BLCK_SIZE]),
             Self::Q6K => Box::new(vec![BlockQ6K::zeros(); elem_count / BlockQ6K::BLCK_SIZE]),
             Self::Q8K => Box::new(vec![BlockQ8K::zeros(); elem_count / BlockQ8K::BLCK_SIZE]),
+            Self::Q2b0 => Box::new(vec![BlockQ2b0::zeros(); elem_count / BlockQ2b0::BLCK_SIZE]),
+            Self::QI8 => Box::new(vec![BlockQI8::zeros(); elem_count / BlockQI8::BLCK_SIZE]),
+            Self::Q2b1 => Box::new(vec![BlockQ2b1::zeros(); elem_count / BlockQ2b1::BLCK_SIZE]),
         }
     }
     /// The type size for blocks in bytes.
@@ -227,6 +239,9 @@ impl GgmlDType {
             Self::Q5K => std::mem::size_of::<BlockQ5K>(),
             Self::Q6K => std::mem::size_of::<BlockQ6K>(),
             Self::Q8K => std::mem::size_of::<BlockQ8K>(),
+            Self::Q2b0 => std::mem::size_of::<BlockQ2b0>(),
+            Self::QI8 => std::mem::size_of::<BlockQI8>(),
+            Self::Q2b1 => std::mem::size_of::<BlockQ2b1>(),
         }
     }
 
@@ -241,6 +256,9 @@ impl GgmlDType {
             Self::Q5_1 => k_quants::QK5_1,
             Self::Q8_0 => k_quants::QK8_0,
             Self::Q8_1 => k_quants::QK8_1,
+            Self::Q2b0 => k_quants::Q2B_0,
+            Self::Q2b1 => k_quants::Q2B_1,
+            Self::QI8 => k_quants::QI8,
             Self::Q2K | Self::Q3K | Self::Q4K | Self::Q5K | Self::Q6K | Self::Q8K => k_quants::QK_K,
         }
     }

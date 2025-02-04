@@ -2243,6 +2243,8 @@ pub enum GgmlDType {
     Q8K,
     F16,
     F32,
+    Q2b0,
+    Q2b1,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2308,6 +2310,12 @@ pub fn call_quantized_matmul_mv_t(
             let align = 4;
             (nth0, nth1, align)
         }
+        GgmlDType::Q2b1 | GgmlDType::Q2b0 => {
+            let nth0 = 8;
+            let nth1 = 8;
+            let align = 8;
+            (nth0, nth1, align)
+        }
         GgmlDType::Q3K | GgmlDType::Q5K => {
             let nth0 = 2;
             let nth1 = 32;
@@ -2332,7 +2340,7 @@ pub fn call_quantized_matmul_mv_t(
             let nth1 = 1;
             let align = 8;
             (nth0, nth1, align)
-        }
+        },
     };
     let thread_groups_count = MTLSize {
         width: divide(ne01 as usize, align),
@@ -2359,6 +2367,8 @@ pub fn call_quantized_matmul_mv_t(
         GgmlDType::Q8K => "kernel_mul_mv_q8_K_f32",
         GgmlDType::F16 => "kernel_mul_mv_f16_f32",
         GgmlDType::F32 => "kernel_mul_mv_f32_f32",
+        GgmlDType::Q2b0 => "kernel_mul_mv_q2b0_f32",
+        GgmlDType::Q2b1 => "kernel_mul_mv_q2b1_f32"    
     };
 
     let pipeline = kernels.load_pipeline(device, Source::Quantized, name)?;

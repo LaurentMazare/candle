@@ -78,6 +78,7 @@ pub mod quantized_blip;
 pub mod quantized_blip_text;
 pub mod quantized_llama;
 pub mod quantized_llama2_c;
+pub mod quantized_llama_bitnet;
 pub mod quantized_metavoice;
 pub mod quantized_mistral;
 pub mod quantized_mixformer;

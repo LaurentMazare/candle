@@ -14,3 +14,4 @@ candle = { workspace = true }
 clap = { workspace = true }
 rayon = { workspace = true }
 safetensors = { workspace = true }
+serde_json = { workspace = true }

@@ -174,6 +174,26 @@ impl Value {
         }
     }
 
+    pub fn from_u8(v: u8) -> Self {
+        Self::U8(v)
+    }
+
+    pub fn from_u64(v: u64) -> Self {
+        Self::U64(v)
+    }
+
+    pub fn from_u32(v: u32) -> Self {
+        Self::U32(v)
+    }
+
+    pub fn from_f32(v: f32) -> Self {
+        Self::F32(v)
+    }
+
+    pub fn from_string(v: String) -> Self {
+        Self::String(v)
+    }
+
     pub fn to_u8(&self) -> Result<u8> {
         match self {
             Self::U8(v) => Ok(*v),
@@ -489,7 +509,7 @@ fn write_string<W: std::io::Write>(w: &mut W, str: &str) -> Result<()> {
 
 pub fn write<W: std::io::Seek + std::io::Write>(
     w: &mut W,
-    metadata: &[(&str, &Value)],
+    metadata: &[(&str, Value)],
     tensors: &[(&str, &QTensor)],
 ) -> Result<()> {
     w.write_u32::<LittleEndian>(0x46554747)?;
