@@ -201,8 +201,8 @@ pub struct HFPreProcessorConfig {
 impl HFLLaVAConfig {
     pub fn to_clip_vision_config(&self) -> ClipVisionConfig {
         ClipVisionConfig {
-            embed_dim: self.vision_config.hidden_size,
-            activation: Activation::QuickGelu,
+            hidden_size: self.vision_config.hidden_size,
+            hidden_act: Activation::QuickGelu,
             intermediate_size: self.vision_config.intermediate_size,
             num_hidden_layers: self.vision_config.num_hidden_layers,
             num_attention_heads: self.vision_config.num_attention_heads,

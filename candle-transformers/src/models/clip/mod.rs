@@ -13,6 +13,7 @@ use self::{
     vision_model::ClipVisionTransformer,
 };
 use candle::{Result, Tensor, D};
+use serde::Deserialize;
 
 pub mod text_model;
 pub mod vision_model;
@@ -35,8 +36,8 @@ pub enum EncoderConfig {
 impl EncoderConfig {
     pub fn embed_dim(&self) -> usize {
         match self {
-            Self::Text(c) => c.embed_dim,
-            Self::Vision(c) => c.embed_dim,
+            Self::Text(c) => c.hidden_size,
+            Self::Vision(c) => c.hidden_size,
         }
     }
 
@@ -64,17 +65,16 @@ impl EncoderConfig {
     pub fn activation(&self) -> Activation {
         match self {
             Self::Text(_c) => Activation::QuickGelu,
-            Self::Vision(c) => c.activation,
+            Self::Vision(c) => c.hidden_act,
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ClipConfig {
     pub text_config: text_model::ClipTextConfig,
     pub vision_config: vision_model::ClipVisionConfig,
     pub logit_scale_init_value: f32,
-    pub image_size: usize,
 }
 
 impl ClipConfig {
@@ -87,7 +87,6 @@ impl ClipConfig {
             text_config,
             vision_config,
             logit_scale_init_value: 2.6592,
-            image_size: 224,
         }
     }
 }
@@ -97,12 +96,12 @@ impl ClipModel {
         let text_model = ClipTextTransformer::new(vs.pp("text_model"), &c.text_config)?;
         let vision_model = ClipVisionTransformer::new(vs.pp("vision_model"), &c.vision_config)?;
         let visual_projection = candle_nn::linear_no_bias(
-            c.vision_config.embed_dim,
+            c.vision_config.hidden_size,
             c.vision_config.projection_dim,
             vs.pp("visual_projection"),
         )?;
         let text_projection = candle_nn::linear_no_bias(
-            c.text_config.embed_dim,
+            c.text_config.hidden_size,
             c.text_config.projection_dim,
             vs.pp("text_projection"),
         )?;

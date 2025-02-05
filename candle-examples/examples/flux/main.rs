@@ -140,9 +140,9 @@ fn run(args: Args) -> Result<()> {
                 let config = clip::text_model::ClipTextConfig {
                     vocab_size: 49408,
                     projection_dim: 768,
-                    activation: clip::text_model::Activation::QuickGelu,
+                    hidden_act: clip::text_model::Activation::QuickGelu,
                     intermediate_size: 3072,
-                    embed_dim: 768,
+                    hidden_size: 768,
                     max_position_embeddings: 77,
                     pad_with: None,
                     num_hidden_layers: 12,

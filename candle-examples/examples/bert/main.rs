@@ -76,7 +76,7 @@ impl Args {
             };
             (config, tokenizer, weights)
         };
-        let config = std::fs::read_to_string(config_filename)?;
+        let config: String = std::fs::read_to_string(config_filename)?;
         let mut config: Config = serde_json::from_str(&config)?;
         let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
 

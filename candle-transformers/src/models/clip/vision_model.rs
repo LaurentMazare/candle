@@ -10,24 +10,30 @@ use candle::{Context, IndexOp, Result, Shape, Tensor, D};
 use candle_nn as nn;
 use candle_nn::Module;
 use nn::Conv2dConfig;
+use serde::Deserialize;
 
 use super::{
     text_model::{Activation, ClipEncoder},
     EncoderConfig,
 };
 
-#[derive(Debug, Clone)]
+fn default_channels() -> usize {
+    3
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ClipVisionConfig {
-    pub embed_dim: usize,
-    pub activation: Activation,
+    pub hidden_size: usize,
+    pub hidden_act: Activation,
     pub intermediate_size: usize,
     pub num_hidden_layers: usize,
     pub num_attention_heads: usize,
-    #[allow(dead_code)]
     pub projection_dim: usize,
-    pub num_channels: usize,
     pub image_size: usize,
     pub patch_size: usize,
+
+    #[serde(default = "default_channels")]
+    pub num_channels: usize,
 }
 
 impl ClipVisionConfig {
@@ -35,8 +41,8 @@ impl ClipVisionConfig {
     // https://huggingface.co/openai/clip-vit-large-patch14/blob/main/config.json
     pub fn vit_base_patch32() -> Self {
         Self {
-            embed_dim: 768,
-            activation: Activation::QuickGelu,
+            hidden_size: 768,
+            hidden_act: Activation::QuickGelu,
             intermediate_size: 3072,
             num_hidden_layers: 12,
             num_attention_heads: 12,
@@ -48,8 +54,8 @@ impl ClipVisionConfig {
     }
     pub fn clip_vit_large_patch14_336() -> Self {
         Self {
-            embed_dim: 1024,
-            activation: Activation::QuickGelu,
+            hidden_size: 1024,
+            hidden_act: Activation::QuickGelu,
             intermediate_size: 4096,
             num_hidden_layers: 24,
             num_attention_heads: 16,
@@ -74,9 +80,9 @@ impl ClipVisionEmbeddings {
     fn new(vs: candle_nn::VarBuilder, c: &ClipVisionConfig) -> Result<Self> {
         // originally nn.Parameter
         let class_embedding = if vs.contains_tensor("class_embedding") {
-            vs.get(c.embed_dim, "class_embedding")?
+            vs.get(c.hidden_size, "class_embedding")?
         } else {
-            Tensor::randn(0f32, 1f32, c.embed_dim, vs.device())?
+            Tensor::randn(0f32, 1f32, c.hidden_size, vs.device())?
         };
 
         let num_patches = (c.image_size / c.patch_size).pow(2);
@@ -88,10 +94,10 @@ impl ClipVisionEmbeddings {
             ..Default::default()
         };
         let position_embedding =
-            candle_nn::embedding(num_positions, c.embed_dim, vs.pp("position_embedding"))?;
+            candle_nn::embedding(num_positions, c.hidden_size, vs.pp("position_embedding"))?;
         let patch_embedding = candle_nn::conv2d_no_bias(
             c.num_channels,
-            c.embed_dim,
+            c.hidden_size,
             c.patch_size,
             conv2dconfig,
             vs.pp("patch_embedding"),
@@ -133,9 +139,9 @@ pub struct ClipVisionTransformer {
 impl ClipVisionTransformer {
     pub fn new(vs: candle_nn::VarBuilder, c: &ClipVisionConfig) -> Result<Self> {
         let embeddings = ClipVisionEmbeddings::new(vs.pp("embeddings"), c)?;
-        let pre_layer_norm = candle_nn::layer_norm(c.embed_dim, 1e-5, vs.pp("pre_layrnorm"))?;
+        let pre_layer_norm = candle_nn::layer_norm(c.hidden_size, 1e-5, vs.pp("pre_layrnorm"))?;
         let encoder = ClipEncoder::new(vs.pp("encoder"), &EncoderConfig::Vision(c.clone()))?;
-        let final_layer_norm = candle_nn::layer_norm(c.embed_dim, 1e-5, vs.pp("post_layernorm"))?;
+        let final_layer_norm = candle_nn::layer_norm(c.hidden_size, 1e-5, vs.pp("post_layernorm"))?;
         Ok(Self {
             embeddings,
             encoder,

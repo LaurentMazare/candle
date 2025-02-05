@@ -9,10 +9,12 @@
 use candle::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn as nn;
 use candle_nn::Module;
+use serde::Deserialize;
 
 use super::EncoderConfig;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Activation {
     QuickGelu,
 }
@@ -25,11 +27,11 @@ impl Module for Activation {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ClipTextConfig {
     pub vocab_size: usize,
-    pub embed_dim: usize,
-    pub activation: Activation,
+    pub hidden_size: usize,
+    pub hidden_act: Activation,
     pub intermediate_size: usize,
     pub max_position_embeddings: usize,
     pub pad_with: Option<String>,
@@ -45,14 +47,14 @@ impl ClipTextConfig {
     pub fn vit_base_patch32() -> Self {
         Self {
             vocab_size: 49408,
-            embed_dim: 512,
+            hidden_size: 512,
             intermediate_size: 2048,
             max_position_embeddings: 77,
             pad_with: None,
             num_hidden_layers: 12,
             num_attention_heads: 8,
             projection_dim: 512,
-            activation: Activation::QuickGelu,
+            hidden_act: Activation::QuickGelu,
         }
     }
 }
@@ -69,10 +71,10 @@ struct ClipTextEmbeddings {
 impl ClipTextEmbeddings {
     fn new(vs: candle_nn::VarBuilder, c: &ClipTextConfig) -> Result<Self> {
         let token_embedding =
-            candle_nn::embedding(c.vocab_size, c.embed_dim, vs.pp("token_embedding"))?;
+            candle_nn::embedding(c.vocab_size, c.hidden_size, vs.pp("token_embedding"))?;
         let position_embedding: nn::Embedding = candle_nn::embedding(
             c.max_position_embeddings,
-            c.embed_dim,
+            c.hidden_size,
             vs.pp("position_embedding"),
         )?;
         let position_ids =
@@ -108,13 +110,13 @@ struct ClipAttention {
 
 impl ClipAttention {
     fn new(vs: candle_nn::VarBuilder, c: &EncoderConfig) -> Result<Self> {
-        let embed_dim = c.embed_dim();
+        let hidden_size = c.embed_dim();
         let num_attention_heads = c.num_attention_heads();
-        let k_proj = candle_nn::linear(embed_dim, embed_dim, vs.pp("k_proj"))?;
-        let v_proj = candle_nn::linear(embed_dim, embed_dim, vs.pp("v_proj"))?;
-        let q_proj = candle_nn::linear(embed_dim, embed_dim, vs.pp("q_proj"))?;
-        let out_proj = candle_nn::linear(embed_dim, embed_dim, vs.pp("out_proj"))?;
-        let head_dim = embed_dim / num_attention_heads;
+        let k_proj = candle_nn::linear(hidden_size, hidden_size, vs.pp("k_proj"))?;
+        let v_proj = candle_nn::linear(hidden_size, hidden_size, vs.pp("v_proj"))?;
+        let q_proj = candle_nn::linear(hidden_size, hidden_size, vs.pp("q_proj"))?;
+        let out_proj = candle_nn::linear(hidden_size, hidden_size, vs.pp("out_proj"))?;
+        let head_dim = hidden_size / num_attention_heads;
         let scale = (head_dim as f64).powf(-0.5);
 
         Ok(ClipAttention {
@@ -136,7 +138,7 @@ impl ClipAttention {
 
     fn forward(&self, xs: &Tensor, causal_attention_mask: Option<&Tensor>) -> Result<Tensor> {
         let in_dtype = xs.dtype();
-        let (bsz, seq_len, embed_dim) = xs.dims3()?;
+        let (bsz, seq_len, hidden_size) = xs.dims3()?;
 
         let query_states = (self.q_proj.forward(xs)? * self.scale)?;
         let proj_shape = (bsz * self.num_attention_heads, seq_len, self.head_dim);
@@ -171,7 +173,7 @@ impl ClipAttention {
         let attn_output = attn_output
             .reshape((bsz, self.num_attention_heads, seq_len, self.head_dim))?
             .transpose(1, 2)?
-            .reshape((bsz, seq_len, embed_dim))?;
+            .reshape((bsz, seq_len, hidden_size))?;
         self.out_proj.forward(&attn_output)
     }
 }
@@ -290,7 +292,8 @@ impl ClipTextTransformer {
     pub fn new(vs: candle_nn::VarBuilder, c: &ClipTextConfig) -> Result<Self> {
         let embeddings = ClipTextEmbeddings::new(vs.pp("embeddings"), c)?;
         let encoder = ClipEncoder::new(vs.pp("encoder"), &EncoderConfig::Text(c.clone()))?;
-        let final_layer_norm = candle_nn::layer_norm(c.embed_dim, 1e-5, vs.pp("final_layer_norm"))?;
+        let final_layer_norm =
+            candle_nn::layer_norm(c.hidden_size, 1e-5, vs.pp("final_layer_norm"))?;
         Ok(ClipTextTransformer {
             embeddings,
             encoder,

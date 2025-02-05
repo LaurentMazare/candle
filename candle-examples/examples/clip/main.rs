@@ -9,26 +9,42 @@ use clap::Parser;
 
 use candle::{DType, Device, Tensor};
 use candle_nn::{ops::softmax, VarBuilder};
-use candle_transformers::models::clip;
+use candle_transformers::models::clip::{self, ClipConfig};
 
+use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
 #[derive(Parser)]
 struct Args {
+    /// model to use from local file. If not provided will download from huggingface
     #[arg(long)]
     model: Option<String>,
 
     #[arg(long)]
     tokenizer: Option<String>,
 
+    /// The images to use
     #[arg(long, use_value_delimiter = true)]
     images: Option<Vec<String>>,
 
     #[arg(long)]
     cpu: bool,
 
+    /// The sequences to use
     #[arg(long, use_value_delimiter = true)]
     sequences: Option<Vec<String>>,
+
+    /// The model_id to use from huggingface, check out available models:https://huggingface.co/openai
+    #[arg(long)]
+    model_id: Option<String>,
+
+    /// The revision to use from huggingface
+    #[arg(long)]
+    revision: Option<String>,
+
+    /// Use the pytorch weights rather than the safetensors ones
+    #[arg(long, default_value = "false")]
+    use_pth: bool,
 }
 
 fn load_image<T: AsRef<std::path::Path>>(path: T, image_size: usize) -> anyhow::Result<Tensor> {
@@ -63,23 +79,46 @@ fn load_images<T: AsRef<std::path::Path>>(
 
 pub fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let model_file = match args.model {
-        None => {
-            let api = hf_hub::api::sync::Api::new()?;
 
-            let api = api.repo(hf_hub::Repo::with_revision(
-                "openai/clip-vit-base-patch32".to_string(),
-                hf_hub::RepoType::Model,
-                "refs/pr/15".to_string(),
-            ));
+    tracing_subscriber::fmt::init();
 
-            api.get("model.safetensors")?
-        }
-        Some(model) => model.into(),
-    };
-    let tokenizer = get_tokenizer(args.tokenizer)?;
-    let config = clip::ClipConfig::vit_base_patch32();
     let device = candle_examples::device(args.cpu)?;
+    let default_model = "openai/clip-vit-base-patch16".to_string();
+    let default_revision = "refs/pr/4".to_string();
+    let (model_id, revision) = match (args.model_id.to_owned(), args.revision.to_owned()) {
+        (Some(model_id), Some(revision)) => (model_id, revision),
+        (Some(model_id), None) => (model_id, "main".to_string()),
+        (None, Some(revision)) => (default_model, revision),
+        (None, None) => (default_model, default_revision),
+    };
+
+    let repo = Repo::with_revision(model_id, RepoType::Model, revision);
+    let (config_filename, tokenizer_filename, weights_filename) = {
+        let api = Api::new()?;
+        let api = api.repo(repo);
+        let config = api.get("config.json")?;
+        let tokenizer = match args.tokenizer {
+            Some(tokenizer) => tokenizer.into(),
+            None => api.get("tokenizer.json")?,
+        };
+        let weights = match args.model {
+            Some(model) => model.into(),
+            None => {
+                if args.use_pth {
+                    api.get("pytorch_model.bin")?
+                } else {
+                    api.get("model.safetensors")?
+                }
+            }
+        };
+
+        (config, tokenizer, weights)
+    };
+
+    let config: String = std::fs::read_to_string(config_filename)?;
+    let config: ClipConfig = serde_json::from_str(&config)?;
+    let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+
     let vec_imgs = match args.images {
         Some(imgs) => imgs,
         None => vec![
@@ -87,9 +126,13 @@ pub fn main() -> anyhow::Result<()> {
             "candle-examples/examples/yolo-v8/assets/bike.jpg".to_string(),
         ],
     };
-    let images = load_images(&vec_imgs, config.image_size)?.to_device(&device)?;
-    let vb =
-        unsafe { VarBuilder::from_mmaped_safetensors(&[model_file.clone()], DType::F32, &device)? };
+
+    let images = load_images(&vec_imgs, config.vision_config.image_size)?.to_device(&device)?;
+
+    let vb = unsafe {
+        VarBuilder::from_mmaped_safetensors(&[weights_filename.clone()], DType::F32, &device)?
+    };
+
     let model = clip::ClipModel::new(vb, &config)?;
     let (input_ids, vec_seq) = tokenize_sequences(args.sequences, &tokenizer, &device)?;
     let (_logits_per_text, logits_per_image) = model.forward(&images, &input_ids)?;
@@ -111,22 +154,6 @@ pub fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
-}
-
-pub fn get_tokenizer(tokenizer: Option<String>) -> anyhow::Result<Tokenizer> {
-    let tokenizer = match tokenizer {
-        None => {
-            let api = hf_hub::api::sync::Api::new()?;
-            let api = api.repo(hf_hub::Repo::with_revision(
-                "openai/clip-vit-base-patch32".to_string(),
-                hf_hub::RepoType::Model,
-                "refs/pr/15".to_string(),
-            ));
-            api.get("tokenizer.json")?
-        }
-        Some(file) => file.into(),
-    };
-    Tokenizer::from_file(tokenizer).map_err(E::msg)
 }
 
 pub fn tokenize_sequences(
