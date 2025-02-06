@@ -6,6 +6,9 @@ use candle::{DType, Device, IndexOp, Result, Tensor};
 pub trait RNN {
     type State: Clone;
 
+    /// Returns the direction of the RNN.
+    fn direction(&self) -> Direction;
+
     /// A zero state from which the recurrent network is usually initialized.
     fn zero_state(&self, batch_dim: usize) -> Result<Self::State>;
 
@@ -31,7 +34,12 @@ pub trait RNN {
         let (_b_size, seq_len, _features) = input.dims3()?;
         let mut output = Vec::with_capacity(seq_len);
         for seq_index in 0..seq_len {
-            let input = input.i((.., seq_index, ..))?.contiguous()?;
+            let index = if self.direction() == Direction::Forward {
+                seq_index
+            } else {
+                seq_len - seq_index - 1
+            };
+            let input = input.i((.., index, ..))?.contiguous()?;
             let state = if seq_index == 0 {
                 self.step(&input, init_state)?
             } else {
@@ -39,11 +47,21 @@ pub trait RNN {
             };
             output.push(state);
         }
+        if self.direction() == Direction::Backward {
+            output.reverse();
+        }
         Ok(output)
     }
 
     /// Converts a sequence of state to a tensor.
     fn states_to_tensor(&self, states: &[Self::State]) -> Result<Tensor>;
+
+    /// Combines forward and backward states to a tensor.
+    fn bidirectional_states_to_tensor(
+        &self,
+        forward_states: &[Self::State],
+        backward_states: &[Self::State],
+    ) -> Result<Tensor>;
 }
 
 /// The state for a LSTM network, this contains two tensors.
@@ -70,7 +88,7 @@ impl LSTMState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     Forward,
     Backward,
@@ -198,6 +216,10 @@ pub fn lstm(
 impl RNN for LSTM {
     type State = LSTMState;
 
+    fn direction(&self) -> Direction {
+        self.config.direction
+    }
+
     fn zero_state(&self, batch_dim: usize) -> Result<Self::State> {
         let zeros =
             Tensor::zeros((batch_dim, self.hidden_dim), self.dtype, &self.device)?.contiguous()?;
@@ -236,6 +258,22 @@ impl RNN for LSTM {
         let states = states.iter().map(|s| s.h.clone()).collect::<Vec<_>>();
         Tensor::stack(&states, 1)
     }
+
+    fn bidirectional_states_to_tensor(
+        &self,
+        forward_states: &[Self::State],
+        backward_states: &[Self::State],
+    ) -> Result<Tensor> {
+        let combine_states = forward_states
+            .iter()
+            .zip(backward_states.iter())
+            .collect::<Vec<_>>();
+        let mut states = Vec::with_capacity(combine_states.len());
+        for (f, b) in combine_states {
+            states.push(Tensor::cat(&[&f.h, &b.h], 1)?);
+        }
+        Tensor::stack(&states, 1)
+    }
 }
 
 /// The state for a GRU network, this contains a single tensor.
@@ -259,6 +297,8 @@ pub struct GRUConfig {
     pub w_hh_init: super::Init,
     pub b_ih_init: Option<super::Init>,
     pub b_hh_init: Option<super::Init>,
+    pub layer_idx: usize,
+    pub direction: Direction,
 }
 
 impl Default for GRUConfig {
@@ -268,6 +308,8 @@ impl Default for GRUConfig {
             w_hh_init: super::init::DEFAULT_KAIMING_UNIFORM,
             b_ih_init: Some(super::Init::Const(0.)),
             b_hh_init: Some(super::Init::Const(0.)),
+            layer_idx: 0,
+            direction: Direction::Forward,
         }
     }
 }
@@ -279,6 +321,8 @@ impl GRUConfig {
             w_hh_init: super::init::DEFAULT_KAIMING_UNIFORM,
             b_ih_init: None,
             b_hh_init: None,
+            layer_idx: 0,
+            direction: Direction::Forward,
         }
     }
 }
@@ -307,22 +351,35 @@ impl GRU {
         config: GRUConfig,
         vb: crate::VarBuilder,
     ) -> Result<Self> {
+        let layer_idx = config.layer_idx;
+        let direction_str = match config.direction {
+            Direction::Forward => "",
+            Direction::Backward => "_reverse",
+        };
         let w_ih = vb.get_with_hints(
             (3 * hidden_dim, in_dim),
-            "weight_ih_l0", // Only a single layer is supported.
+            &format!("weight_ih_l{layer_idx}{direction_str}"),
             config.w_ih_init,
         )?;
         let w_hh = vb.get_with_hints(
             (3 * hidden_dim, hidden_dim),
-            "weight_hh_l0", // Only a single layer is supported.
+            &format!("weight_hh_l{layer_idx}{direction_str}"),
             config.w_hh_init,
         )?;
         let b_ih = match config.b_ih_init {
-            Some(init) => Some(vb.get_with_hints(3 * hidden_dim, "bias_ih_l0", init)?),
+            Some(init) => Some(vb.get_with_hints(
+                3 * hidden_dim,
+                &format!("bias_ih_l{layer_idx}{direction_str}"),
+                init,
+            )?),
             None => None,
         };
         let b_hh = match config.b_hh_init {
-            Some(init) => Some(vb.get_with_hints(3 * hidden_dim, "bias_hh_l0", init)?),
+            Some(init) => Some(vb.get_with_hints(
+                3 * hidden_dim,
+                &format!("bias_hh_l{layer_idx}{direction_str}"),
+                init,
+            )?),
             None => None,
         };
         Ok(Self {
@@ -354,6 +411,10 @@ pub fn gru(
 impl RNN for GRU {
     type State = GRUState;
 
+    fn direction(&self) -> Direction {
+        self.config.direction
+    }
+
     fn zero_state(&self, batch_dim: usize) -> Result<Self::State> {
         let h =
             Tensor::zeros((batch_dim, self.hidden_dim), self.dtype, &self.device)?.contiguous()?;
@@ -383,6 +444,22 @@ impl RNN for GRU {
 
     fn states_to_tensor(&self, states: &[Self::State]) -> Result<Tensor> {
         let states = states.iter().map(|s| s.h.clone()).collect::<Vec<_>>();
-        Tensor::cat(&states, 1)
+        Tensor::stack(&states, 1)
+    }
+
+    fn bidirectional_states_to_tensor(
+        &self,
+        forward_states: &[Self::State],
+        backward_states: &[Self::State],
+    ) -> Result<Tensor> {
+        let combine_states = forward_states
+            .iter()
+            .zip(backward_states.iter())
+            .collect::<Vec<_>>();
+        let mut states = Vec::with_capacity(combine_states.len());
+        for (f, b) in combine_states {
+            states.push(Tensor::cat(&[&f.h, &b.h], 1)?);
+        }
+        Tensor::stack(&states, 1)
     }
 }
