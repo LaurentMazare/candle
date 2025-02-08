@@ -56,3 +56,7 @@ harness = false
 [[example]]
 name = "metal_basics"
 required-features = ["metal"]
+
+[[example]]
+name = "cuda_basics"
+required-features = ["cuda"]
