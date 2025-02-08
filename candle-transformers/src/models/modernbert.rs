@@ -8,13 +8,28 @@
 
 use candle::{DType, Device, Result, Tensor, D};
 use candle_nn::{
-    embedding, layer_norm_no_bias, linear_no_bias, ops::softmax, Embedding, LayerNorm, Linear,
+    embedding, layer_norm_no_bias, linear_no_bias, ops::softmax, Embedding, LayerNorm, Linear, Dropout,
     Module, VarBuilder,
 };
 use serde::Deserialize;
+use std::collections::HashMap;
 
 use core::f32;
 use std::sync::Arc;
+
+#[derive(Debug)]
+pub struct NERItem {
+    pub entity: String,
+    pub word: String,
+    pub score: f32,
+    pub start: usize,
+    pub end: usize,
+    pub index: usize,
+}
+
+
+pub type Id2Label = HashMap<u32, String>;
+pub type Label2Id = HashMap<String, u32>;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Config {
@@ -30,6 +45,9 @@ pub struct Config {
     pub global_rope_theta: f64,
     pub local_attention: usize,
     pub local_rope_theta: f64,
+    pub id2label: Option<Id2Label>,
+    pub label2id: Option<Label2Id>,
+    pub classifier_dropout: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -405,3 +423,44 @@ impl ModernBertForMaskedLM {
         Ok(xs)
     }
 }
+
+pub struct ModernBertForTokenClassification {
+    model: ModernBert,
+    drop: Dropout,
+    classifier: Linear,
+}
+
+
+impl ModernBertForTokenClassification {
+    pub fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
+        let model = ModernBert::load(vb.clone(), config)?;
+        let classifier_dropout = config.classifier_dropout;
+        let drop = Dropout::new(classifier_dropout);
+        let num_labels = config.id2label.clone().unwrap().len();
+        let classifier: candle_nn::Linear = candle_nn::linear_no_bias(
+            config.hidden_size,
+            num_labels.try_into().unwrap(),
+            vb.root().pp("classifier"),
+        )?;
+
+        Ok(Self {
+            model,
+            drop,
+            classifier,
+        })
+    }
+
+    pub fn forward(
+        &self,
+        input_ids: &Tensor,
+        attention_mask: &Tensor,
+    ) -> Result<Tensor> {
+        let output = self
+            .model
+            .forward(input_ids, attention_mask)?;
+        let output = self.drop.forward(&output, false)?;
+        self.classifier.forward(&output)
+    }
+}
+
+
