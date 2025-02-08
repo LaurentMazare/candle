@@ -121,6 +121,13 @@ impl VecOps for half::bf16 {
     fn max(self, other: Self) -> Self {
         Self::max(self, other)
     }
+
+    #[inline(always)]
+    unsafe fn vec_dot(lhs: *const Self, rhs: *const Self, res: *mut Self, len: usize) {
+        let mut res_f32 = 0f32;
+        super::vec_dot_bf16(lhs, rhs, &mut res_f32, len);
+        *res = half::bf16::from_f32(res_f32);
+    }
 }
 impl VecOps for u8 {
     #[inline(always)]
