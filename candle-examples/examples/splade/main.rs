@@ -92,7 +92,7 @@ fn main() -> Result<()> {
         println!("Loading weights from pytorch_model.bin");
         VarBuilder::from_pth(&weights_filename, dtype, &device).unwrap()
     };
-    let model = BertForMaskedLM::load(vb, &config)?;
+    let model = BertForMaskedLM::load(vb, &config, false)?;
 
     if let Some(prompt) = args.prompt {
         let tokenizer = tokenizer
