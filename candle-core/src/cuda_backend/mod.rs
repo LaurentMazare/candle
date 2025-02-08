@@ -14,7 +14,7 @@ use half::{bf16, f16};
 #[cfg(feature = "cudnn")]
 pub mod cudnn;
 mod device;
-mod error;
+pub mod error;
 mod utils;
 pub use device::{CudaDevice, DeviceId};
 pub use error::{CudaError, WrapErr};
