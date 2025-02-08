@@ -5,7 +5,10 @@ extern crate intel_mkl_src;
 extern crate accelerate_src;
 
 use candle::{DType, Device, Result, Tensor};
-use candle_nn::{linear, AdamW, Linear, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
+use candle_nn::{
+    linear, AdamW, FnLRScheduler, LRScheduler, Linear, Module, Optimizer, ParamsAdamW, VarBuilder,
+    VarMap,
+};
 
 fn gen_data() -> Result<(Tensor, Tensor)> {
     // Generate some sample linear data.
@@ -29,7 +32,12 @@ fn main() -> Result<()> {
         ..Default::default()
     };
     let mut opt = AdamW::new(varmap.all_vars(), params)?;
+    let mut scheduler = FnLRScheduler::<usize>::new(Box::new(|step| {
+        Ok(0.2 * 0.9f64.powi((step as f64 / 1000f64).floor() as i32))
+    }));
+
     for step in 0..10000 {
+        opt.set_learning_rate(scheduler.step(step)?);
         let ys = model.forward(&sample_xs)?;
         let loss = ys.sub(&sample_ys)?.sqr()?.sum_all()?;
         opt.backward_step(&loss)?;

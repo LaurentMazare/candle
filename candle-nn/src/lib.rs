@@ -29,6 +29,7 @@ pub mod linear;
 pub mod loss;
 pub mod ops;
 pub mod optim;
+pub mod scheduler;
 pub mod rnn;
 pub mod rotary_emb;
 pub mod sequential;
@@ -52,6 +53,7 @@ pub use layer_norm::{
 pub use linear::{linear, linear_b, linear_no_bias, Linear};
 pub use ops::Dropout;
 pub use optim::{AdamW, Optimizer, ParamsAdamW, SGD};
+pub use scheduler::{FnLRScheduler, LRScheduler};
 pub use rnn::{gru, lstm, GRUConfig, LSTMConfig, GRU, LSTM, RNN};
 pub use sequential::{seq, Sequential};
 pub use var_builder::VarBuilder;
