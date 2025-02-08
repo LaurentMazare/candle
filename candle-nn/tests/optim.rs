@@ -8,12 +8,15 @@ use candle::test_utils::{to_vec0_round, to_vec2_round};
 
 use anyhow::Result;
 use candle::{DType, Device, Tensor, Var};
-use candle_nn::{AdamW, Linear, Module, Optimizer, ParamsAdamW, SGD};
+use candle_nn::{
+    optim::{AdamWScheduler, ConstantScheduler, SchedulerCreator, SchedulerParamsAdamW},
+    AdamW, Linear, Module, Optimizer, ParamsAdamW, SGD,
+};
 
 #[test]
 fn sgd_optim() -> Result<()> {
     let x = Var::new(0f32, &Device::Cpu)?;
-    let mut sgd = SGD::new(vec![x.clone()], 0.1)?;
+    let mut sgd = SGD::new(vec![x.clone()], ConstantScheduler::new(0.1)?, ())?;
     let xt = x.as_tensor();
     for _step in 0..100 {
         let loss = ((xt - 4.2)? * (xt - 4.2)?)?;
@@ -59,7 +62,13 @@ fn sgd_linear_regression() -> Result<()> {
     // Now use backprop to run a linear regression between samples and get the coefficients back.
     let w = Var::new(&[[0f32, 0.]], &Device::Cpu)?;
     let b = Var::new(0f32, &Device::Cpu)?;
-    let mut sgd = SGD::new(vec![w.clone(), b.clone()], 0.004)?;
+
+    let mut sgd = SGD::new(
+        vec![w.clone(), b.clone()],
+        ConstantScheduler::new(0.004)?,
+        (),
+    )?;
+
     let lin = Linear::new(w.as_tensor().clone(), Some(b.as_tensor().clone()));
     for _step in 0..1000 {
         let ys = lin.forward(&sample_xs)?;
@@ -106,11 +115,17 @@ fn adamw_linear_regression() -> Result<()> {
     // Now use backprop to run a linear regression between samples and get the coefficients back.
     let w = Var::new(&[[0f32, 0.]], &Device::Cpu)?;
     let b = Var::new(0f32, &Device::Cpu)?;
-    let params = ParamsAdamW {
+
+    let scheduler_params = SchedulerParamsAdamW {
         lr: 0.1,
         ..Default::default()
     };
-    let mut opt = AdamW::new(vec![w.clone(), b.clone()], params)?;
+    let mut opt = AdamW::new(
+        vec![w.clone(), b.clone()],
+        AdamWScheduler::new(scheduler_params)?,
+        ParamsAdamW::default(),
+    )?;
+
     let lin = Linear::new(w.as_tensor().clone(), Some(b.as_tensor().clone()));
     for _step in 0..100 {
         let ys = lin.forward(&sample_xs)?;
@@ -137,11 +152,17 @@ fn adamw_linear_regression_varmap() -> Result<()> {
 
     let w = var_map.get((1, 2), "w", Const(0.), DType::F32, &Device::Cpu)?;
     let b = var_map.get((), "b", Const(0.), DType::F32, &Device::Cpu)?;
-    let params = ParamsAdamW {
+
+    let scheduler_params = SchedulerParamsAdamW {
         lr: 0.1,
         ..Default::default()
     };
-    let mut opt = AdamW::new(var_map.all_vars(), params)?;
+    let mut opt = AdamW::new(
+        var_map.all_vars(),
+        AdamWScheduler::new(scheduler_params)?,
+        ParamsAdamW::default(),
+    )?;
+
     let lin = Linear::new(w, Some(b));
     for _step in 0..100 {
         let ys = lin.forward(&sample_xs)?;
