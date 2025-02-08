@@ -1,11 +1,14 @@
 //! Types for elements that can be stored and manipulated using tensors.
 #![allow(clippy::redundant_closure_call)]
 use crate::backend::BackendStorage;
+use crate::cpu::kernels::VecOps;
 use crate::{CpuStorage, CpuStorageRef, Error, Result};
 
 /// The different types of elements allowed in tensors.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DType {
+    // Floating-point 8 bits integer (4-bit exponent, 3-bit mantissa).
+    F8E4M3,
     // Unsigned 8 bits integer.
     U8,
     // Unsigned 32 bits integer.
@@ -44,6 +47,7 @@ impl std::str::FromStr for DType {
             "f16" => Ok(Self::F16),
             "f32" => Ok(Self::F32),
             "f64" => Ok(Self::F64),
+            "f8_e4m3" => Ok(Self::F8E4M3),
             _ => Err(DTypeParseError(s.to_string())),
         }
     }
@@ -60,6 +64,7 @@ impl DType {
             Self::F16 => "f16",
             Self::F32 => "f32",
             Self::F64 => "f64",
+            Self::F8E4M3 => "f8_e4m3",
         }
     }
 
@@ -67,6 +72,7 @@ impl DType {
     pub fn size_in_bytes(&self) -> usize {
         match self {
             Self::U8 => 1,
+            Self::F8E4M3 => 1,
             Self::U32 => 4,
             Self::I64 => 8,
             Self::BF16 => 2,
@@ -79,14 +85,14 @@ impl DType {
     pub fn is_int(&self) -> bool {
         match self {
             Self::U8 | Self::U32 | Self::I64 => true,
-            Self::BF16 | Self::F16 | Self::F32 | Self::F64 => false,
+            Self::BF16 | Self::F16 | Self::F32 | Self::F64 | Self::F8E4M3 => false,
         }
     }
 
     pub fn is_float(&self) -> bool {
         match self {
             Self::U8 | Self::U32 | Self::I64 => false,
-            Self::BF16 | Self::F16 | Self::F32 | Self::F64 => true,
+            Self::BF16 | Self::F16 | Self::F32 | Self::F64 | Self::F8E4M3 => true,
         }
     }
 }
@@ -165,6 +171,7 @@ macro_rules! with_dtype {
         }
     };
 }
+use float8::F8E4M3;
 use half::{bf16, f16};
 
 with_dtype!(u8, U8, |v: f64| v as u8, |v: u8| v as f64);
@@ -174,6 +181,17 @@ with_dtype!(f16, F16, f16::from_f64, f16::to_f64);
 with_dtype!(bf16, BF16, bf16::from_f64, bf16::to_f64);
 with_dtype!(f32, F32, |v: f64| v as f32, |v: f32| v as f64);
 with_dtype!(f64, F64, |v: f64| v, |v: f64| v);
+with_dtype!(F8E4M3, F8E4M3, |v: f64| F8E4M3::from_f64(v), |v: F8E4M3| v
+    .to_f64());
+
+impl VecOps for F8E4M3 {
+    fn max(self, rhs: Self) -> Self {
+        F8E4M3::max(self, rhs)
+    }
+    fn min(self, rhs: Self) -> Self {
+        F8E4M3::min(self, rhs)
+    }
+}
 
 pub trait IntDType: WithDType {
     fn is_true(&self) -> bool;
@@ -213,3 +231,4 @@ impl FloatDType for f16 {}
 impl FloatDType for bf16 {}
 impl FloatDType for f32 {}
 impl FloatDType for f64 {}
+impl FloatDType for F8E4M3 {}

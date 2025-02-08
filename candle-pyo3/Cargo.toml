@@ -19,6 +19,7 @@ candle = { workspace = true }
 candle-nn = { workspace = true }
 candle-onnx = { workspace = true, optional = true }
 half = { workspace = true }
+float8 = { workspace = true }
 intel-mkl-src = { workspace = true, optional = true }
 pyo3 = { version = "0.22.0", features = ["extension-module", "abi3-py311"] }
 
