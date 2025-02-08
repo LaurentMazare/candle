@@ -6,6 +6,7 @@ use crate::scalar::TensorOrScalar;
 use crate::shape::{Dim, Dims};
 use crate::{bail, storage::Storage, DType, Device, Error, Layout, Result, Shape};
 use std::sync::{Arc, RwLock};
+use crate::quantized::QTensor;
 
 /// Unique identifier for tensors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1277,6 +1278,16 @@ impl Tensor {
         )?;
         let op = BackpropOp::new2(self, rhs, Op::Matmul);
         Ok(from_storage(storage, c_shape, op, false))
+    }
+
+    pub fn qmatmul(&self, rhs: &Arc<QTensor>) -> Result<Tensor> {
+        let (storage, shape) = self.storage().apply_op1(self.layout(), rhs.as_ref())?;
+        Ok(from_storage(
+            storage,
+            shape,
+            BackpropOp::new_qmatmul(rhs, self),
+            false
+        ))
     }
 
     /// Matrix-multiplication with broadcasting support.

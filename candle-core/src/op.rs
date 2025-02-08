@@ -1,9 +1,11 @@
 //! Tensor Opertion Enums and Traits
 //!
 #![allow(clippy::redundant_closure_call)]
+use crate::quantized::QTensor;
 use crate::Tensor;
 use half::{bf16, f16};
 use num_traits::float::Float;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CmpOp {
@@ -179,6 +181,8 @@ pub enum Op {
         Tensor,
         std::sync::Arc<Box<dyn crate::CustomOp3 + Send + Sync>>,
     ),
+
+    QMatmul(std::sync::Arc<QTensor>, Tensor),
 }
 
 pub trait UnaryOpT {
@@ -912,6 +916,15 @@ impl BackpropOp {
         let op = if args.iter().any(|arg| arg.as_ref().track_op()) {
             let args: Vec<Tensor> = args.iter().map(|arg| arg.as_ref().clone()).collect();
             Some(f(args))
+        } else {
+            None
+        };
+        Self(op)
+    }
+
+    pub(crate) fn new_qmatmul(arg1: &Arc<QTensor>, arg2: &Tensor) -> Self {
+        let op = if arg2.track_op() {
+            Some(Op::QMatmul(arg1.clone(), arg2.clone()))
         } else {
             None
         };
