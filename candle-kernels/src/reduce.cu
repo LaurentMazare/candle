@@ -571,13 +571,22 @@ fast_argmax(const size_t src_numel, const size_t el_to_sum_per_block,
     rope_thd<TYPENAME>(src, cos, sin, dst, b, t, h, d); \
   } \
 
-#if __CUDA_ARCH__ >= 800
+#if __CUDA_ARCH__ >= 800 || (__CUDA_ARCH__ >= 530 && __CUDA_ARCH__ < 800)
 SOFTMAX_OP(__nv_bfloat16, float, softmax_bf16)
 RMSNORM_OP(__nv_bfloat16, rmsnorm_bf16)
 LAYERNORM_OP(__nv_bfloat16, layernorm_bf16)
 ROPE_OP(__nv_bfloat16, rope_bf16, rope_i_bf16, rope_thd_bf16)
-SUM_OP(__nv_bfloat16, sum_bf16)
 FAST_OP(__nv_bfloat16, fast_min_bf16, fast_max_bf16, fast_argmin_bf16, fast_argmax_bf16, fast_sum_bf16)
+#endif
+
+#if __CUDA_ARCH__ >= 750 
+SUM_OP(__nv_bfloat16, sum_bf16)
+#elif __CUDA_ARCH__ >= 530 &&  __CUDA_ARCH__ < 750
+// The automatic fallback mechanism for these architectures:
+// 1. Converts bfloat16 to float using __bfloat162float
+// 2. Performs atomicAdd with floats
+// 3. Converts back to bfloat16
+// SUM_OP(__nv_bfloat16, sum_bf16)
 #endif
 
 #if __CUDA_ARCH__ >= 530

@@ -70,7 +70,8 @@ extern "C" __global__ void FN_NAME( \
     cast_through<SRC_TYPENAME, DST_TYPENAME, INT_TYPENAME>(numel, num_dims, info, inp, out); \
 } \
 
-#if __CUDA_ARCH__ >= 800
+
+#if __CUDA_ARCH__ >= 800 || (__CUDA_ARCH__ >= 530 && __CUDA_ARCH__ < 800)
 CAST_OP(__nv_bfloat16, __nv_bfloat16, cast_bf16_bf16)
 
 CAST_OP(__nv_bfloat16, uint32_t, cast_bf16_u32)
@@ -83,22 +84,9 @@ CAST_OP(double,   __nv_bfloat16, cast_f64_bf16)
 CAST_THROUGH_OP(__nv_bfloat16, uint8_t, float, cast_bf16_u8)
 CAST_THROUGH_OP(__nv_bfloat16, __half,   float, cast_bf16_f16)
 CAST_THROUGH_OP(__half,   __nv_bfloat16, float, cast_f16_bf16)
-#else
-#include <cuda.h>
-#if CUDA_VERSION >= 11000
-CAST_OP(__nv_bfloat16, float,    cast_bf16_f32)
-CAST_OP(float,    __nv_bfloat16, cast_f32_bf16)
-CAST_THROUGH_OP(__nv_bfloat16, uint8_t, float, cast_bf16_u8)
-CAST_THROUGH_OP(__nv_bfloat16, __half,  float, cast_bf16_f16)
-CAST_THROUGH_OP(__nv_bfloat16, double,  float, cast_bf16_f64)
-CAST_THROUGH_OP(__half,   __nv_bfloat16, float, cast_f16_bf16)
-CAST_THROUGH_OP(double,   __nv_bfloat16, float, cast_f64_bf16)
-CAST_THROUGH_OP(uint8_t,   __nv_bfloat16, float, cast_u8_bf16)
 #endif
-#endif
-
 #if __CUDA_ARCH__ >= 530
-CAST_OP(__half, __half, cast_f16_f16)
+CAST_OP(__half,   __half, cast_f16_f16)
 
 CAST_THROUGH_OP(__half, uint8_t,  float, cast_f16_u8)
 CAST_OP(__half, uint32_t, cast_f16_u32)

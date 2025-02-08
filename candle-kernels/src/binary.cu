@@ -1,7 +1,7 @@
 #include "binary_op_macros.cuh"
 #include<stdint.h>
 
-#if __CUDA_ARCH__ >= 800
+#if __CUDA_ARCH__ >= 800 || (__CUDA_ARCH__ >= 530 && __CUDA_ARCH__ < 800)
 BINARY_OP(__nv_bfloat16, badd_bf16, x + y)
 BINARY_OP(__nv_bfloat16, bdiv_bf16, x / y)
 BINARY_OP(__nv_bfloat16, bmul_bf16, x * y)

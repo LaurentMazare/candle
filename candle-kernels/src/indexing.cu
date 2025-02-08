@@ -146,7 +146,7 @@ extern "C" __global__ void FN_NAME(  \
 ) { scatter_add(ids, inp, out, left_size, src_dim_size, dst_dim_size, right_size); } \
 
 
-#if __CUDA_ARCH__ >= 800
+#if __CUDA_ARCH__ >= 800 || (__CUDA_ARCH__ >= 530 && __CUDA_ARCH__ < 800)
 IS_OP(__nv_bfloat16, int64_t, is_i64_bf16)
 IS_OP(__nv_bfloat16, uint32_t, is_u32_bf16)
 IS_OP(__nv_bfloat16, uint8_t, is_u8_bf16)
