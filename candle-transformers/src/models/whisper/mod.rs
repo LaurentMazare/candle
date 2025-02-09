@@ -16,6 +16,10 @@ pub mod quantized_model;
 
 use serde::Deserialize;
 
+fn default_use_flash_attn() -> bool {
+    false
+}
+
 // The names in comments correspond to the original implementation:
 // https://github.com/openai/whisper/blob/f572f2161ba831bae131364c3bffdead7af6d210/whisper/model.py#L17
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -32,6 +36,8 @@ pub struct Config {
     pub decoder_layers: usize,          // n_text_layer
     #[serde(default)]
     pub suppress_tokens: Vec<u32>,
+    #[serde(default = "default_use_flash_attn")]
+    pub use_flash_attn: bool,
 }
 
 pub const DTYPE: candle::DType = candle::DType::F32;
