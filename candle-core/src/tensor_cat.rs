@@ -241,7 +241,7 @@ impl Tensor {
     /// `self` and `src` must have the same shape except on dimension `dim` where the `self` size
     /// has to be greater than or equal to `offset` plus the `src` size.
     ///
-    /// Note that this modifies `self` in place and as such is not compatibel with
+    /// Note that this modifies `self` in place and as such is not compatible with
     /// back-propagation.  
     pub fn slice_set<D: Dim>(&self, src: &Self, dim: D, offset: usize) -> Result<()> {
         let dim = dim.to_index(self.shape(), "slice-set")?;
