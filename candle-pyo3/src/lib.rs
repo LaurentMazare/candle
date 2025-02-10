@@ -1456,7 +1456,7 @@ fn save_gguf(path: &str, tensors: PyObject, metadata: PyObject, py: Python<'_>) 
 
     let converted_metadata: Vec<_> = metadata
         .iter()
-        .map(|(name, value)| (name.as_str(), value))
+        .map(|(name, value)| (name.as_str(), value.clone()))
         .collect();
 
     let converted_tensors: Vec<_> = tensors

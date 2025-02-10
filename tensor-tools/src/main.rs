@@ -1,7 +1,10 @@
+use candle::op::Op;
 use candle::quantized::{gguf_file, GgmlDType, QTensor};
-use candle::{Device, Result};
+use candle::{Device, Result, Tensor};
 use clap::{Parser, Subcommand, ValueEnum};
 use rayon::prelude::*;
+use safetensors::tensor;
+use serde_json;
 
 #[derive(ValueEnum, Debug, Clone)]
 enum QuantizationMode {
@@ -11,7 +14,13 @@ enum QuantizationMode {
 }
 
 impl QuantizationMode {
-    fn quantize(&self, name: &str, tensor: QTensor, dtype: GgmlDType) -> Result<QTensor> {
+    fn quantize(
+        &self,
+        name: &str,
+        tensor: QTensor,
+        dtype: GgmlDType,
+        bitnet_mode: bool,
+    ) -> Result<QTensor> {
         match self {
             Self::Llama => {
                 // Same behavior as the llama.cpp quantization.
@@ -45,6 +54,12 @@ enum Quantization {
     Q8_0,
     #[value(name = "q8_1")]
     Q8_1,
+    #[value(name = "q2b0")]
+    Q2b0,
+    #[value(name = "q2b1")]
+    Q2b1,
+    #[value(name = "qi8")]
+    QI8,
     Q2k,
     Q3k,
     Q4k,
@@ -72,6 +87,9 @@ impl Quantization {
             Quantization::Q8k => GgmlDType::Q8K,
             Quantization::F16 => GgmlDType::F16,
             Quantization::F32 => GgmlDType::F32,
+            Quantization::Q2b0 => GgmlDType::Q2b0,
+            Quantization::QI8 => GgmlDType::QI8,
+            Quantization::Q2b1 => GgmlDType::Q2b1,
         }
     }
 }
@@ -142,6 +160,13 @@ enum Command {
         /// The output file, in gguf format.
         #[arg(long)]
         out_file: std::path::PathBuf,
+
+        #[clap(long, short, action)]
+        bitnet_mode: bool,
+
+        // Allow to specify quantization_bitnet in case of bitnet_mode
+        #[arg(long, value_enum)]
+        bitnet_quantization: Option<Quantization>,
 
         /// The quantization schema to apply.
         #[arg(long, value_enum)]
@@ -285,10 +310,15 @@ fn run_print(
                 println!("==== {name} ====");
                 match content.tensor(&mut file, name, device) {
                     Ok(tensor) => {
+                        let dtype = tensor.dtype();
+
                         let tensor = tensor.dequantize(device)?;
-                        println!("{tensor}")
+                        println!("{tensor} {dtype:?}")
                     }
-                    Err(_) => println!("not found"),
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        println!("not found")
+                    }
                 }
             }
         }
@@ -395,40 +425,226 @@ fn run_ls(
     Ok(())
 }
 
-fn run_quantize_safetensors(
-    in_files: &[std::path::PathBuf],
-    out_file: std::path::PathBuf,
-    q: Quantization,
-) -> Result<()> {
-    let mut out_file = std::fs::File::create(out_file)?;
-    let mut tensors = std::collections::HashMap::new();
-    for in_file in in_files.iter() {
-        let in_tensors = candle::safetensors::load(in_file, &Device::Cpu)?;
-        tensors.extend(in_tensors)
-    }
-    println!("tensors: {}", tensors.len());
+fn unpack_bitnet_weights(tensor: &Tensor) -> Result<Tensor> {
+    let packed_vec = tensor.to_vec2::<u8>().unwrap();
 
+    let rows = tensor.dim(0).unwrap();
+    let cols = tensor.dim(1).unwrap();
+
+    let mut unpacked_vec = vec![0f32; rows * 4 * cols];
+
+    for i in 0..rows {
+        for j in 0..cols {
+            let packed = packed_vec[i][j];
+
+            for k in 0..4 {
+                let bits = ((packed >> (k * 2)) & 0b11) as i8 - 1;
+                let index = (k * rows + i) * cols + j;
+                unpacked_vec[index] = bits as f32;
+            }
+        }
+    }
+
+    let unpacked_tensor = Tensor::from_vec(unpacked_vec, (rows * 4, cols), tensor.device())?;
+    Ok(unpacked_tensor)
+}
+
+use core::num;
+use rayon::prelude::*;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::fs::File;
+use std::path::PathBuf;
+
+fn permute(weights: &Tensor, n_head: usize, n_head_kv: Option<usize>) -> Result<Tensor> {
+    let n_head = match n_head_kv {
+        Some(n_head_kv) if n_head != n_head_kv => n_head_kv,
+        _ => n_head,
+    };
+
+    let shape = weights.shape();
+    let shape0 = shape.dims()[0];
+    if shape0 % (n_head * 2) != 0 {
+        candle::bail!("weights.shape()[0] is not divisible by (n_head * 2)");
+    }
+
+    let mut new_shape = vec![n_head, 2, shape0 / (n_head * 2)];
+    new_shape.extend_from_slice(&shape.dims()[1..]);
+
+    let permuted = weights
+        .reshape(new_shape)?
+        .transpose(1, 2)?
+        .reshape(weights.shape())?;
+
+    Ok(permuted)
+}
+
+fn run_quantize_safetensors(
+    in_files: &[PathBuf],
+    out_file: PathBuf,
+    q: Quantization,
+    bq: Option<Quantization>,
+    bitnet_mode: bool,
+) -> Result<()> {
+    let mut out_file = File::create(out_file)?;
     let dtype = q.dtype();
     let block_size = dtype.block_size();
 
-    let qtensors = tensors
-        .into_par_iter()
-        .map(|(name, tensor)| {
-            let should_quantize = tensor.rank() == 2 && tensor.dim(1)? % block_size == 0;
-            println!("  quantizing {name} {tensor:?} {should_quantize}");
-            let tensor = if should_quantize {
-                QTensor::quantize(&tensor, dtype)?
-            } else {
-                QTensor::quantize(&tensor, GgmlDType::F32)?
-            };
-            Ok((name, tensor))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let metadata_file = in_files
+        .iter()
+        .find(|f| f.to_string_lossy().ends_with("config.json"));
+
+    let mut qtensors = Vec::new();
+
+    let mut num_attention_heads = 0;
+    let mut num_key_value_heads = 0;
+    let mut architecture = String::new();
+
+    let gguf_metadata = if let Some(metadata_file) = metadata_file {
+        let metadata_content = std::fs::read_to_string(metadata_file)?;
+        let metadata: serde_json::Value = serde_json::from_str(&metadata_content).unwrap();
+
+        num_attention_heads = metadata["num_attention_heads"].as_u64().unwrap();
+        num_key_value_heads = metadata["num_key_value_heads"].as_u64().unwrap();
+        architecture = metadata["model_type"].as_str().unwrap().to_string();
+
+        vec![
+            (
+                "llama.attention.head_count",
+                gguf_file::Value::from_u32(num_attention_heads as u32),
+            ),
+            (
+                "llama.attention.head_count_kv",
+                gguf_file::Value::from_u32(metadata["num_key_value_heads"].as_u64().unwrap() as u32),
+            ),
+            (
+                "llama.block_count",
+                gguf_file::Value::from_u32(metadata["num_hidden_layers"].as_u64().unwrap() as u32),
+            ),
+            (
+                "llama.embedding_length",
+                gguf_file::Value::from_u32(metadata["hidden_size"].as_u64().unwrap() as u32),
+            ),
+            (
+                "llama.attention.layer_norm_rms_epsilon",
+                gguf_file::Value::from_f32(metadata["rms_norm_eps"].as_f64().unwrap() as f32),
+            ),
+            (
+                "llama.rope.dimension_count",
+                gguf_file::Value::from_u32(
+                    (metadata["hidden_size"].as_u64().unwrap() as u32)
+                        / (metadata["num_attention_heads"].as_u64().unwrap() as u32),
+                ),
+            ),
+            (
+                "llama.rope.freq_base",
+                gguf_file::Value::from_f32(metadata["rope_theta"].as_f64().unwrap() as f32),
+            ),
+            (
+                "general.architecture",
+                gguf_file::Value::from_string(architecture.clone()),
+            ),
+        ]
+    } else {
+        vec![]
+    };
+    for in_file in in_files {
+        if let Some(metadata) = &metadata_file {
+            if Some(in_file) == Some(metadata) {
+                continue;
+            }
+        }
+
+        println!("Loading tensors from file: {:?}", in_file);
+        let in_tensors = candle::safetensors::load(in_file, &Device::Cpu)?;
+
+        let processed_tensors = in_tensors
+            .into_par_iter()
+            .map(|(mut name, tensor)| {
+                let mut local_dtype = dtype.clone();
+                let mut should_quantize = tensor.rank() == 2 && tensor.dim(1)? % block_size == 0;
+                let mut tensor = tensor;
+
+                if should_quantize && bitnet_mode {
+                    let is_bitnet_weight = name.contains("self_attn.v_proj")
+                        || name.contains("self_attn.q_proj")
+                        || name.contains("self_attn.o_proj")
+                        || name.contains("self_attn.k_proj")
+                        || name.contains("mlp.down_proj")
+                        || name.contains("mlp.up_proj")
+                        || name.contains("mlp.gate_proj");
+
+                    if is_bitnet_weight {
+                        println!("  unpacking {name} {tensor:?} {should_quantize}");
+                        tensor = unpack_bitnet_weights(&tensor)?;
+                        local_dtype = bq.clone().unwrap().dtype();
+                    }
+                }
+
+                if name == "lm_head.weight" {
+                    local_dtype = GgmlDType::Q6K;
+                }
+
+                // apply transformations to the tensors, based on the architecture
+                match architecture.as_str() {
+                    "llama" => {
+                        if name.ends_with("self_attn.q_proj.weight") {
+                            tensor = permute(
+                                &tensor,
+                                num_attention_heads as usize,
+                                Some(num_attention_heads as usize),
+                            )?;
+                        }
+                        if name.ends_with("self_attn.k_proj.weight") {
+                            tensor = permute(
+                                &tensor,
+                                num_attention_heads as usize,
+                                Some(num_key_value_heads as usize),
+                            )?;
+                        }
+                    }
+                    _ => {}
+                }
+
+                println!("  quantizing {name} {tensor:?} {should_quantize}");
+                let tensor = if should_quantize {
+                    QTensor::quantize(&tensor, local_dtype)?
+                } else {
+                    QTensor::quantize(&tensor, GgmlDType::F32)?
+                };
+
+                if name == "model.embed_tokens.weight" {
+                    name = "token_embd.weight".to_string();
+                } else if name == "model.norm.weight" {
+                    name = "output_norm.weight".to_string();
+                } else if name == "lm_head.weight" {
+                    name = "output.weight".to_string();
+                }
+
+                name = name.replace("model.layers.", "blk.");
+                name = name.replace("self_attn.q_proj", "attn_q");
+                name = name.replace("self_attn.k_proj", "attn_k");
+                name = name.replace("self_attn.v_proj", "attn_v");
+                name = name.replace("self_attn.o_proj", "attn_output");
+                name = name.replace("mlp.gate_proj", "ffn_gate");
+                name = name.replace("mlp.down_proj", "ffn_down");
+                name = name.replace("mlp.up_proj", "ffn_up");
+                name = name.replace("input_layernorm", "attn_norm");
+                name = name.replace("post_attention_layernorm", "ffn_norm");
+
+                Ok((name, tensor))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        qtensors.extend(processed_tensors);
+    }
+
     let qtensors = qtensors
         .iter()
         .map(|(k, v)| (k.as_str(), v))
         .collect::<Vec<_>>();
-    gguf_file::write(&mut out_file, &[], &qtensors)?;
+
+    gguf_file::write(&mut out_file, &gguf_metadata, &qtensors)?;
     Ok(())
 }
 
@@ -454,10 +670,15 @@ fn run_quantize(
     out_file: std::path::PathBuf,
     q: Quantization,
     qmode: QuantizationMode,
+    bq: Option<Quantization>,
+    bitnet_mode: bool,
     device: &Device,
 ) -> Result<()> {
     if in_files.is_empty() {
         candle::bail!("no specified input files")
+    }
+    if bitnet_mode && bq.is_none() {
+        candle::bail!("bitnet mode requires a bitnet quantization")
     }
     if let Some(extension) = out_file.extension() {
         if extension == "safetensors" {
@@ -466,7 +687,7 @@ fn run_quantize(
     }
     if let Some(extension) = in_files[0].extension() {
         if extension == "safetensors" {
-            return run_quantize_safetensors(in_files, out_file, q);
+            return run_quantize_safetensors(in_files, out_file, q, bq, bitnet_mode);
         }
     }
 
@@ -488,7 +709,7 @@ fn run_quantize(
             println!("  quantizing {name}");
             let mut in_file = std::fs::File::open(&in_files[0])?;
             let tensor = content.tensor(&mut in_file, name, device)?;
-            let tensor = qmode.quantize(name, tensor, dtype)?;
+            let tensor = qmode.quantize(name, tensor, dtype, bitnet_mode)?;
             Ok((name, tensor))
         })
         .collect::<Result<Vec<_>>>()?;
@@ -500,7 +721,7 @@ fn run_quantize(
     let metadata = content
         .metadata
         .iter()
-        .map(|(k, v)| (k.as_str(), v))
+        .map(|(k, v)| (k.as_str(), v.clone()))
         .collect::<Vec<_>>();
     gguf_file::write(&mut out_file, metadata.as_slice(), &qtensors)?;
     Ok(())
@@ -534,8 +755,18 @@ fn main() -> anyhow::Result<()> {
             in_file,
             out_file,
             quantization,
+            bitnet_quantization,
             mode,
-        } => run_quantize(&in_file, out_file, quantization, mode, &device)?,
+            bitnet_mode,
+        } => run_quantize(
+            &in_file,
+            out_file,
+            quantization,
+            mode,
+            bitnet_quantization,
+            bitnet_mode,
+            &device,
+        )?,
         Command::Dequantize { in_file, out_file } => run_dequantize(in_file, out_file, &device)?,
     }
     Ok(())
