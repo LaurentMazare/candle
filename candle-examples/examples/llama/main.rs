@@ -18,11 +18,11 @@ use clap::{Parser, ValueEnum};
 use candle::{DType, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::generation::{LogitsProcessor, Sampling};
-use hf_hub::{api::sync::Api, Repo, RepoType};
-use std::io::Write;
-
 use candle_transformers::models::llama as model;
+use hf_hub::{api::sync::Api, Repo, RepoType};
 use model::{Llama, LlamaConfig};
+use std::io::Write;
+use std::path::Path;
 
 const EOS_TOKEN: &str = "</s>";
 const DEFAULT_PROMPT: &str = "My favorite theorem is ";
@@ -120,6 +120,9 @@ struct Args {
     /// The context size to consider for the repeat penalty.
     #[arg(long, default_value_t = 128)]
     repeat_last_n: usize,
+
+    #[arg(long)]
+    weight_path: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -173,8 +176,15 @@ fn main() -> Result<()> {
         let revision = args.revision.unwrap_or("main".to_string());
         let api = api.repo(Repo::with_revision(model_id, RepoType::Model, revision));
 
-        let tokenizer_filename = api.get("tokenizer.json")?;
-        let config_filename = api.get("config.json")?;
+        let tokenizer_filename = match &args.weight_path {
+            Some(path) => Path::new(path).join("tokenizer.json"),
+            _ => api.get("tokenizer.json")?,
+        };
+        let config_filename = match &args.weight_path {
+            Some(path) => Path::new(path).join("config.json"),
+            _ => api.get("config.json")?,
+        };
+
         let config: LlamaConfig = serde_json::from_slice(&std::fs::read(config_filename)?)?;
         let config = config.into_config(args.use_flash_attn);
 
@@ -187,9 +197,13 @@ fn main() -> Result<()> {
             | Which::V31Instruct
             | Which::V32_3b
             | Which::V32_3bInstruct
-            | Which::Solar10_7B => {
-                candle_examples::hub_load_safetensors(&api, "model.safetensors.index.json")?
-            }
+            | Which::Solar10_7B => match &args.weight_path {
+                Some(path) => candle_examples::hub_load_local_safetensors(
+                    path,
+                    "model.safetensors.index.json",
+                )?,
+                _ => candle_examples::hub_load_safetensors(&api, "model.safetensors.index.json")?,
+            },
             Which::SmolLM2_360M
             | Which::SmolLM2_360MInstruct
             | Which::SmolLM2_135M
@@ -198,9 +212,10 @@ fn main() -> Result<()> {
             | Which::SmolLM2_1BInstruct
             | Which::V32_1b
             | Which::V32_1bInstruct
-            | Which::TinyLlama1_1BChat => {
-                vec![api.get("model.safetensors")?]
-            }
+            | Which::TinyLlama1_1BChat => match &args.weight_path {
+                Some(path) => vec![Path::new(path).join("model.safetensors")],
+                _ => vec![api.get("model.safetensors")?],
+            },
         };
         let cache = model::Cache::new(!args.no_kv_cache, dtype, &config, &device)?;
 

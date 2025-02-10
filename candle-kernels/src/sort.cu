@@ -5,72 +5,63 @@
 #include<stdint.h>
 
 template<typename T>
-static inline __device__ void ggml_cuda_swap(T & a, T & b) {
+inline __device__ void swap(T & a, T & b) {
     T tmp = a;
     a = b;
     b = tmp;
 }
 
-template<int order, typename T>
-static __device__ void k_argsort(const T * x, uint32_t * dst, const int ncols, int ncols_pad) {
-    // bitonic sort
-    int col = threadIdx.x;
-    int row = blockIdx.y;
+template <typename T>
+__device__ void bitonicSortGPU(T* arr, uint32_t * dst, int j, int k, bool ascending) {
+    unsigned int i, ij;
+    i = threadIdx.x + blockDim.x * blockIdx.x;
+    ij = i ^ j;
 
-    if (col >= ncols_pad) {
-        return;
-    }
-
-    const T * x_row = x + row * ncols;
-    extern __shared__ int dst_row[];
-
-    // initialize indices
-    dst_row[col] = col;
-
-    __syncthreads();
-
-    for (int k = 2; k <= ncols_pad; k *= 2) {
-        for (int j = k / 2; j > 0; j /= 2) {
-            int ixj = col ^ j;
-            if (ixj > col) {
-                if ((col & k) == 0) {
-                    if (dst_row[col] >= ncols ||
-                        (dst_row[ixj] < ncols && (order == SORT_ORDER_ASC ?
-                            x_row[dst_row[col]] > x_row[dst_row[ixj]] :
-                            x_row[dst_row[col]] < x_row[dst_row[ixj]]))
-                    ) {
-                        ggml_cuda_swap(dst_row[col], dst_row[ixj]);
-                    }
-                } else {
-                    if (dst_row[ixj] >= ncols ||
-                        (dst_row[col] < ncols && (order == SORT_ORDER_ASC ?
-                            x_row[dst_row[col]] < x_row[dst_row[ixj]] :
-                            x_row[dst_row[col]] > x_row[dst_row[ixj]]))
-                    ) {
-                        ggml_cuda_swap(dst_row[col], dst_row[ixj]);
-                    }
+    if (ij > i) {
+        if ((i & k) == 0) {
+            // Sort in ascending order
+            if (ascending) {
+                if (arr[i] > arr[ij]) {
+                    swap(arr[i], arr[ij]);
+                    swap(dst[i], dst[ij]);
                 }
             }
-            __syncthreads();
+            // Sort in descending order
+            else {
+                if (arr[i] < arr[ij]) {
+                    swap(arr[i], arr[ij]);
+                    swap(dst[i], dst[ij]);
+                }
+            }
+        } else {
+            // Sort in ascending order
+            if (ascending) {
+                if (arr[i] < arr[ij]) {
+                    swap(arr[i], arr[ij]);
+                    swap(dst[i], dst[ij]);
+                }
+            }
+            // Sort in descending order
+            else {
+                if (arr[i] > arr[ij]) {
+                    swap(arr[i], arr[ij]);
+                    swap(dst[i], dst[ij]);
+                }
+            }
         }
-    }
-
-    // copy the result to dst without the padding
-    if (col < ncols) {
-        dst[row * ncols + col] = dst_row[col];
     }
 }
 
 #define ASORT_OP(TYPENAME, RUST_NAME) \
 extern "C" __global__ void asort_asc_##RUST_NAME(  \
-    const TYPENAME * x, uint32_t * dst, const int ncols, int ncols_pad \
+    TYPENAME * x, uint32_t * dst, const int j, const int k \
 ) { \
-    k_argsort<SORT_ORDER_ASC>(x, dst, ncols, ncols_pad); \
+    bitonicSortGPU(x, dst, j, k, true);\
 } \
 extern "C" __global__ void asort_desc_##RUST_NAME(  \
-    const TYPENAME * x, uint32_t * dst, const int ncols, int ncols_pad \
+    TYPENAME * x, uint32_t * dst, const int j, const int k \
 ) { \
-    k_argsort<SORT_ORDER_DESC>(x, dst, ncols, ncols_pad); \
+    bitonicSortGPU(x, dst, j, k, false);\
 } \
  
 #if __CUDA_ARCH__ >= 800
