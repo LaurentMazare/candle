@@ -32,10 +32,10 @@ cargo run --example stable-diffusion --release --features=cuda,cudnn \
     -- --prompt "a cosmonaut on a horse (hd, realistic, high-def)" --sd-version turbo
 ```
 
-The default scheduler for the v1.5, v2.1 and XL 1.0 version is the Denoising
+The default scheduler for the v1.5 and v2.1 version is the Denoising
 Diffusion Implicit Model scheduler (DDIM). The original paper and some code can
 be found in the [associated repo](https://github.com/ermongroup/ddim).
-The default scheduler for the XL Turbo version is the Euler Ancestral scheduler.
+The default scheduler for the XL 1.0 and XL Turbo version is the Euler Ancestral scheduler.
 
 ### Command-line flags
 

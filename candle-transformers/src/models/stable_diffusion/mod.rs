@@ -261,10 +261,12 @@ impl StableDiffusionConfig {
             use_quant_conv: true,
             use_post_quant_conv: true,
         };
-        let scheduler = Arc::new(ddim::DDIMSchedulerConfig {
-            prediction_type,
-            ..Default::default()
-        });
+        let scheduler = Arc::new(
+            euler_ancestral_discrete::EulerAncestralDiscreteSchedulerConfig {
+                prediction_type,
+                ..Default::default()
+            },
+        );
 
         let height = if let Some(height) = height {
             assert_eq!(height % 8, 0, "height has to be divisible by 8");
