@@ -116,6 +116,46 @@ pub trait WithDType:
 
     fn cpu_storage_as_slice(s: &CpuStorage) -> Result<&[Self]>;
     fn cpu_storage_data(s: CpuStorage) -> Result<Vec<Self>>;
+    fn cpu_storage_as(s: &CpuStorage, layout: &crate::Layout, dtype: DType) -> Result<CpuStorage>;
+}
+
+macro_rules! cpu_storage_as {
+    (@inner $in_dtype:ident, ($($out_ty:ident),+)) => {
+        $(($in_dtype, $out_ty)),+
+    };
+
+    (match:($cpu_storage:expr, $dtype:ident), $layout:ident, $in_dtype:ident, ($($out_ty:ident),+)) => {{
+        macro_rules! as_ {
+            (U8,   U8,   $v:expr) => {$v};
+            (U32,  U32,  $v:expr) => {$v};
+            (I64,  I64,  $v:expr) => {$v};
+            (F32,  F32,  $v:expr) => {$v};
+            (F64,  F64,  $v:expr) => {$v};
+            (BF16, BF16, $v:expr) => {$v};
+            (F16,  F16,  $v:expr) => {$v};
+            ($in:expr, U8,   $v:expr) => { num_traits::AsPrimitive::<u8>::as_($v)};
+            ($in:expr, U32,  $v:expr) => { num_traits::AsPrimitive::<u32>::as_($v)};
+            ($in:expr, I64,  $v:expr) => { num_traits::AsPrimitive::<i64>::as_($v)};
+            ($in:expr, F32,  $v:expr) => { num_traits::AsPrimitive::<f32>::as_($v)};
+            ($in:expr, F64,  $v:expr) => { num_traits::AsPrimitive::<f64>::as_($v)};
+            ($in:expr, BF16, $v:expr) => { num_traits::AsPrimitive::<bf16>::as_($v)};
+            ($in:expr, F16,  $v:expr) => { num_traits::AsPrimitive::<f16>::as_($v)};
+        }
+
+        match ($cpu_storage, $dtype) {
+            $((CpuStorage::$in_dtype(storage), DType::$out_ty) => {
+                Ok({ let data = crate::cpu_backend::unary_map(&storage, $layout,
+                    |v| as_!($in_dtype, $out_ty, v));
+                CpuStorage::$out_ty(data)
+            })}),+,
+            _ => Err(Error::UnexpectedDType {
+                expected: $dtype,
+                got: $cpu_storage.dtype(),
+                msg: "unexpected dtype",
+            }
+            .bt()),
+        }
+    }};
 }
 
 macro_rules! with_dtype {
@@ -161,6 +201,11 @@ macro_rules! with_dtype {
                     }
                     .bt()),
                 }
+            }
+
+            #[inline]
+            fn cpu_storage_as(s: &CpuStorage, layout: &crate::Layout, dtype: DType) -> Result<CpuStorage> {
+                cpu_storage_as!(match:(s, dtype), layout, $dtype, (U8, U32, I64, F16, BF16, F32, F64))
             }
         }
     };
