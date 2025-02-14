@@ -28,6 +28,10 @@ impl QMetalStorage {
         Err(Error::NotCompiledWithMetalSupport)
     }
 
+    pub fn quantize_onto(&mut self, _src: &crate::CpuStorage) -> Result<()> {
+        Err(Error::NotCompiledWithCudaSupport)
+    }
+
     pub fn storage_size_in_bytes(&self) -> usize {
         0
     }
