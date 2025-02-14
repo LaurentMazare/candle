@@ -29,6 +29,7 @@ pub mod convmixer;
 pub mod convnext;
 pub mod dac;
 pub mod debertav2;
+pub mod deepseek2;
 pub mod depth_anything_v2;
 pub mod dinov2;
 pub mod dinov2reg4;
