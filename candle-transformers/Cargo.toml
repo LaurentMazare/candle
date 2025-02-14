@@ -24,6 +24,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_plain = { workspace = true }
 tracing = { workspace = true }
+float8 = { workspace = true }
 
 [features]
 default = []

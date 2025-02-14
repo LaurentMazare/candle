@@ -27,11 +27,13 @@
 //! ```
 use crate::{DType, Device, Error, Result, Shape, Tensor};
 use byteorder::{LittleEndian, ReadBytesExt};
+use float8::F8E4M3;
 use half::{bf16, f16, slice::HalfFloatSliceExt};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::path::Path;
+use std::slice;
 
 const NPY_MAGIC_STRING: &[u8] = b"\x93NUMPY";
 const NPY_SUFFIX: &str = ".npy";
@@ -88,6 +90,7 @@ impl Header {
             DType::I64 => "i8",
             DType::U32 => "u4",
             DType::U8 => "u1",
+            DType::F8E4M3 => Err(Error::Npy("f8e4m3 is not supported".into()))?,
         };
         if !shape.is_empty() {
             shape.push(',')
@@ -237,6 +240,13 @@ impl Tensor {
             DType::I64 => {
                 let mut data_t = vec![0i64; elem_count];
                 reader.read_i64_into::<LittleEndian>(&mut data_t)?;
+                Tensor::from_vec(data_t, shape, &Device::Cpu)
+            }
+            DType::F8E4M3 => {
+                let mut data_t = vec![F8E4M3::ZERO; elem_count];
+                let ptr = data_t.as_mut_ptr().cast::<i8>();
+                let len = data_t.len();
+                reader.read_i8_into(unsafe { slice::from_raw_parts_mut(ptr, len) })?;
                 Tensor::from_vec(data_t, shape, &Device::Cpu)
             }
         }
