@@ -2259,6 +2259,7 @@ pub enum GgmlDType {
     Q8K,
     F16,
     F32,
+    BF16,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2336,7 +2337,7 @@ pub fn call_quantized_matmul_mv_t(
             let align = 2;
             (nth0, nth1, align)
         }
-        GgmlDType::F16 | GgmlDType::Q8K => {
+        GgmlDType::F16 | GgmlDType::BF16 | GgmlDType::Q8K => {
             // Original implem uses rows
             let nth0 = 32;
             let nth1 = 1;
@@ -2374,6 +2375,7 @@ pub fn call_quantized_matmul_mv_t(
         GgmlDType::Q6K => "kernel_mul_mv_q6_K_f32",
         GgmlDType::Q8K => "kernel_mul_mv_q8_K_f32",
         GgmlDType::F16 => "kernel_mul_mv_f16_f32",
+        GgmlDType::BF16 => "kernel_mul_mv_bf16_f32",
         GgmlDType::F32 => "kernel_mul_mv_f32_f32",
     };
 

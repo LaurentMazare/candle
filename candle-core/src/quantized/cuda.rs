@@ -423,6 +423,7 @@ impl QCudaStorage {
         match self.dtype {
             GgmlDType::F32 => deq::<f32>(&buffer, block_len, &mut out)?,
             GgmlDType::F16 => deq::<half::f16>(&buffer, block_len, &mut out)?,
+            GgmlDType::BF16 => deq::<half::bf16>(&buffer, block_len, &mut out)?,
             GgmlDType::Q4_0 => deq::<crate::quantized::BlockQ4_0>(&buffer, block_len, &mut out)?,
             GgmlDType::Q4_1 => deq::<crate::quantized::BlockQ4_1>(&buffer, block_len, &mut out)?,
             GgmlDType::Q5_0 => deq::<crate::quantized::BlockQ5_0>(&buffer, block_len, &mut out)?,
