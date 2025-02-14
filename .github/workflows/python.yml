@@ -1,0 +1,68 @@
+name: PyO3-CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - candle-pyo3/**
+  pull_request:
+    paths:
+      - candle-pyo3/**
+
+jobs:
+  build_and_test:
+    name: Check everything builds & tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest] # For now, only test on Linux
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          architecture: "x64"
+
+      - name: Cache Cargo Registry
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+            version: "25.0"
+            repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install
+        working-directory: ./candle-pyo3
+        run: |
+          python -m venv .env
+          source .env/bin/activate
+          pip install -U pip
+          pip install pytest maturin black
+          python -m maturin develop -r --features onnx
+
+      - name: Check style
+        working-directory: ./candle-pyo3
+        run: |
+          source .env/bin/activate
+          python stub.py --check
+          black --check .
+
+      - name: Run tests
+        working-directory: ./candle-pyo3
+        run: |
+          source .env/bin/activate
+          python -m pytest -s -v tests

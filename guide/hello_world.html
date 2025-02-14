@@ -1,0 +1,373 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Hello World - MNIST - Candle Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Candle Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="hello-world"><a class="header" href="#hello-world">Hello world!</a></h1>
+<p>We will now create the hello world of the ML world, building a model capable of solving MNIST dataset.</p>
+<p>Open <code>src/main.rs</code> and fill in this content:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate candle_core;
+</span>use candle_core::{Device, Result, Tensor};
+
+struct Model {
+    first: Tensor,
+    second: Tensor,
+}
+
+impl Model {
+    fn forward(&amp;self, image: &amp;Tensor) -&gt; Result&lt;Tensor&gt; {
+        let x = image.matmul(&amp;self.first)?;
+        let x = x.relu()?;
+        x.matmul(&amp;self.second)
+    }
+}
+
+fn main() -&gt; Result&lt;()&gt; {
+    // Use Device::new_cuda(0)?; to use the GPU.
+    let device = Device::Cpu;
+
+    let first = Tensor::randn(0f32, 1.0, (784, 100), &amp;device)?;
+    let second = Tensor::randn(0f32, 1.0, (100, 10), &amp;device)?;
+    let model = Model { first, second };
+
+    let dummy_image = Tensor::randn(0f32, 1.0, (1, 784), &amp;device)?;
+
+    let digit = model.forward(&amp;dummy_image)?;
+    println!("Digit {digit:?} digit");
+    Ok(())
+}</code></pre></pre>
+<p>Everything should now run with:</p>
+<pre><code class="language-bash">cargo run --release
+</code></pre>
+<h2 id="using-a-linear-layer"><a class="header" href="#using-a-linear-layer">Using a <code>Linear</code> layer.</a></h2>
+<p>Now that we have this, we might want to complexify things a bit, for instance by adding <code>bias</code> and creating
+the classical <code>Linear</code> layer. We can do as such</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate candle_core;
+</span><span class="boring">use candle_core::{Device, Result, Tensor};
+</span>struct Linear{
+    weight: Tensor,
+    bias: Tensor,
+}
+impl Linear{
+    fn forward(&amp;self, x: &amp;Tensor) -&gt; Result&lt;Tensor&gt; {
+        let x = x.matmul(&amp;self.weight)?;
+        x.broadcast_add(&amp;self.bias)
+    }
+}
+
+struct Model {
+    first: Linear,
+    second: Linear,
+}
+
+impl Model {
+    fn forward(&amp;self, image: &amp;Tensor) -&gt; Result&lt;Tensor&gt; {
+        let x = self.first.forward(image)?;
+        let x = x.relu()?;
+        self.second.forward(&amp;x)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>This will change the model running code into a new function</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate candle_core;
+</span><span class="boring">use candle_core::{Device, Result, Tensor};
+</span><span class="boring">struct Linear{
+</span><span class="boring">    weight: Tensor,
+</span><span class="boring">    bias: Tensor,
+</span><span class="boring">}
+</span><span class="boring">impl Linear{
+</span><span class="boring">    fn forward(&amp;self, x: &amp;Tensor) -&gt; Result&lt;Tensor&gt; {
+</span><span class="boring">        let x = x.matmul(&amp;self.weight)?;
+</span><span class="boring">        x.broadcast_add(&amp;self.bias)
+</span><span class="boring">    }
+</span><span class="boring">}
+</span><span class="boring">
+</span><span class="boring">struct Model {
+</span><span class="boring">    first: Linear,
+</span><span class="boring">    second: Linear,
+</span><span class="boring">}
+</span><span class="boring">
+</span><span class="boring">impl Model {
+</span><span class="boring">    fn forward(&amp;self, image: &amp;Tensor) -&gt; Result&lt;Tensor&gt; {
+</span><span class="boring">        let x = self.first.forward(image)?;
+</span><span class="boring">        let x = x.relu()?;
+</span><span class="boring">        self.second.forward(&amp;x)
+</span><span class="boring">    }
+</span><span class="boring">}
+</span>fn main() -&gt; Result&lt;()&gt; {
+    // Use Device::new_cuda(0)?; to use the GPU.
+    // Use Device::Cpu; to use the CPU.
+    let device = Device::cuda_if_available(0)?;
+
+    // Creating a dummy model
+    let weight = Tensor::randn(0f32, 1.0, (784, 100), &amp;device)?;
+    let bias = Tensor::randn(0f32, 1.0, (100, ), &amp;device)?;
+    let first = Linear{weight, bias};
+    let weight = Tensor::randn(0f32, 1.0, (100, 10), &amp;device)?;
+    let bias = Tensor::randn(0f32, 1.0, (10, ), &amp;device)?;
+    let second = Linear{weight, bias};
+    let model = Model { first, second };
+
+    let dummy_image = Tensor::randn(0f32, 1.0, (1, 784), &amp;device)?;
+
+    // Inference on the model
+    let digit = model.forward(&amp;dummy_image)?;
+    println!("Digit {digit:?} digit");
+    Ok(())
+}</code></pre></pre>
+<p>Now it works, it is a great way to create your own layers.
+But most of the classical layers are already implemented in <a href="https://github.com/huggingface/candle/tree/main/candle-nn">candle-nn</a>.</p>
+<h2 id="using-candle_nn"><a class="header" href="#using-candle_nn">Using <code>candle_nn</code>.</a></h2>
+<p>For instance <a href="https://github.com/huggingface/candle/blob/main/candle-nn/src/linear.rs">Linear</a> is already there.
+This Linear is coded with PyTorch layout in mind, to reuse better existing models out there, so it uses the transpose of the weights and not the weights directly.</p>
+<p>So instead we can simplify our example:</p>
+<pre><code class="language-bash">cargo add --git https://github.com/huggingface/candle.git candle-nn
+</code></pre>
+<p>And rewrite our examples using it</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate candle_core;
+</span><span class="boring">extern crate candle_nn;
+</span>use candle_core::{Device, Result, Tensor};
+use candle_nn::{Linear, Module};
+
+struct Model {
+    first: Linear,
+    second: Linear,
+}
+
+impl Model {
+    fn forward(&amp;self, image: &amp;Tensor) -&gt; Result&lt;Tensor&gt; {
+        let x = self.first.forward(image)?;
+        let x = x.relu()?;
+        self.second.forward(&amp;x)
+    }
+}
+
+fn main() -&gt; Result&lt;()&gt; {
+    // Use Device::new_cuda(0)?; to use the GPU.
+    let device = Device::Cpu;
+
+    // This has changed (784, 100) -&gt; (100, 784) !
+    let weight = Tensor::randn(0f32, 1.0, (100, 784), &amp;device)?;
+    let bias = Tensor::randn(0f32, 1.0, (100, ), &amp;device)?;
+    let first = Linear::new(weight, Some(bias));
+    let weight = Tensor::randn(0f32, 1.0, (10, 100), &amp;device)?;
+    let bias = Tensor::randn(0f32, 1.0, (10, ), &amp;device)?;
+    let second = Linear::new(weight, Some(bias));
+    let model = Model { first, second };
+
+    let dummy_image = Tensor::randn(0f32, 1.0, (1, 784), &amp;device)?;
+
+    let digit = model.forward(&amp;dummy_image)?;
+    println!("Digit {digit:?} digit");
+    Ok(())
+}</code></pre></pre>
+<p>Feel free to modify this example to use <code>Conv2d</code> to create a classical convnet instead.</p>
+<p>Now that we have the running dummy code we can get to more advanced topics:</p>
+<ul>
+<li><a href="../guide/cheatsheet.html">For PyTorch users</a></li>
+<li><a href="../inference/inference.html">Running existing models</a></li>
+<li><a href="../training/training.html">Training models</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../guide/installation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../guide/cheatsheet.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../guide/installation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../guide/cheatsheet.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
