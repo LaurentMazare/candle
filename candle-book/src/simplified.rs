@@ -18,7 +18,7 @@
 mod tests {
 
 use candle::{DType, Result, Tensor, D, Device};
-use candle_nn::{loss, ops, Linear, Module, VarBuilder, VarMap, Optimizer};
+use candle_nn::{loss, ops, optim::{SchedulerCreator, ConstantScheduler}, Linear, Module, Optimizer, VarBuilder, VarMap};
 
 // ANCHOR: book_training_simplified1
 const VOTE_DIM: usize = 2;
@@ -157,7 +157,7 @@ fn train(m: Dataset, dev: &Device) -> anyhow::Result<MultiLevelPerceptron> {
     let varmap = VarMap::new();
     let vs = VarBuilder::from_varmap(&varmap, DType::F32, dev);
     let model = MultiLevelPerceptron::new(vs.clone())?;
-    let mut sgd = candle_nn::SGD::new(varmap.all_vars(), LEARNING_RATE)?;
+    let mut sgd = candle_nn::SGD::new(varmap.all_vars(), ConstantScheduler::new(LEARNING_RATE)?, ())?;
     let test_votes = m.test_votes.to_device(dev)?;
     let test_results = m.test_results.to_device(dev)?;
     let mut final_accuracy: f32 = 0.0;
