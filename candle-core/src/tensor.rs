@@ -2655,68 +2655,27 @@ bin_trait!(Sub, sub, |_| 1., |v: f64| -v);
 bin_trait!(Mul, mul, |v| v, |_| 0.);
 bin_trait!(Div, div, |v| 1. / v, |_| 0.);
 
-impl std::ops::Add<Tensor> for f64 {
-    type Output = Result<Tensor>;
+macro_rules! impl_f64_tensor_ops {
+    ($trait:ident, $method:ident, $impl:expr) => {
+        impl std::ops::$trait<Tensor> for f64 {
+            type Output = Result<Tensor>;
 
-    fn add(self, rhs: Tensor) -> Self::Output {
-        rhs + self
+            fn $method(self, rhs: Tensor) -> Self::Output {
+                $impl(self, &rhs)
+            }
+        }
+
+        impl std::ops::$trait<&Tensor> for f64 {
+            type Output = Result<Tensor>;
+
+            fn $method(self, rhs: &Tensor) -> Self::Output {
+                $impl(self, rhs)
+            }
+        }
     }
 }
 
-impl std::ops::Add<&Tensor> for f64 {
-    type Output = Result<Tensor>;
-
-    fn add(self, rhs: &Tensor) -> Self::Output {
-        rhs + self
-    }
-}
-
-impl std::ops::Mul<Tensor> for f64 {
-    type Output = Result<Tensor>;
-
-    fn mul(self, rhs: Tensor) -> Self::Output {
-        rhs * self
-    }
-}
-
-impl std::ops::Mul<&Tensor> for f64 {
-    type Output = Result<Tensor>;
-
-    fn mul(self, rhs: &Tensor) -> Self::Output {
-        rhs * self
-    }
-}
-
-impl std::ops::Sub<Tensor> for f64 {
-    type Output = Result<Tensor>;
-
-    fn sub(self, rhs: Tensor) -> Self::Output {
-        rhs.affine(-1., self)
-    }
-}
-
-impl std::ops::Sub<&Tensor> for f64 {
-    type Output = Result<Tensor>;
-
-    fn sub(self, rhs: &Tensor) -> Self::Output {
-        rhs.affine(-1., self)
-    }
-}
-
-impl std::ops::Div<Tensor> for f64 {
-    type Output = Result<Tensor>;
-
-    #[allow(clippy::suspicious_arithmetic_impl)]
-    fn div(self, rhs: Tensor) -> Self::Output {
-        rhs.recip()? * self
-    }
-}
-
-impl std::ops::Div<&Tensor> for f64 {
-    type Output = Result<Tensor>;
-
-    #[allow(clippy::suspicious_arithmetic_impl)]
-    fn div(self, rhs: &Tensor) -> Self::Output {
-        rhs.recip()? * self
-    }
-}
+impl_f64_tensor_ops!(Add, add, |self_: f64, rhs: &Tensor| rhs + self_);
+impl_f64_tensor_ops!(Sub, sub, |self_: f64, rhs: &Tensor| rhs.affine(-1., self_));
+impl_f64_tensor_ops!(Mul, mul, |self_: f64, rhs: &Tensor| rhs * self_);
+impl_f64_tensor_ops!(Div, div, |self_: f64, rhs: &Tensor| rhs.recip()? * self_);
