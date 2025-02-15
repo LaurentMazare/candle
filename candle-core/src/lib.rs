@@ -70,6 +70,8 @@ pub mod layout;
 pub mod metal_backend;
 #[cfg(feature = "mkl")]
 mod mkl;
+#[cfg(not(any(feature = "mkl", feature = "accelerate")))]
+mod mathfun;
 pub mod npy;
 pub mod op;
 pub mod pickle;

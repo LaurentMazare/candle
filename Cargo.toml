@@ -54,6 +54,7 @@ imageproc = { version = "0.24.0", default-features = false }
 intel-mkl-src = { version = "0.8.1", features = ["mkl-static-lp64-iomp"] }
 libc = { version = "0.2.147" }
 log = "0.4"
+mathfun = "0.2.1"
 memmap2 = { version = "0.9.3", features = ["stable_deref_trait"] }
 num_cpus = "1.15.0"
 num-traits = "0.2.15"
