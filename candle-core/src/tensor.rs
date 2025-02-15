@@ -2580,6 +2580,23 @@ impl Tensor {
     pub fn broadcast_pow(&self, rhs: &Tensor) -> Result<Self> {
         rhs.broadcast_mul(&self.log()?)?.exp()
     }
+
+    pub fn is_inf(&self) -> Result<Self> {
+        self.broadcast_eq(&Tensor::new(f64::INFINITY, self.device())?.to_dtype(self.dtype)?)
+    }
+
+    pub fn any(&self) -> Result<bool> {
+        let sum = self.sum_all()?;
+        match self.dtype {
+            DType::U8 => Ok(sum.to_scalar::<u8>()? == 0),
+            DType::U32 => Ok(sum.to_scalar::<u32>()? == 0),
+            DType::I64 => Ok(sum.to_scalar::<i64>()? == 0),
+            DType::F16 => Ok(sum.to_scalar::<half::f16>()? == half::f16::from_f32_const(0.)),
+            DType::BF16 => Ok(sum.to_scalar::<half::bf16>()? == half::bf16::from_f32_const(0.)),
+            DType::F32 => Ok(sum.to_scalar::<f32>()? == 0.),
+            DType::F64 => Ok(sum.to_scalar::<f64>()? == 0.),
+        }
+    }
 }
 
 macro_rules! bin_trait {
