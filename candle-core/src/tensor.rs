@@ -1,12 +1,17 @@
 //! Tensors are N-dimensional matrixes of elements using a single data type.
 #![allow(clippy::redundant_closure_call)]
 use crate::backend::{BackendDevice, BackendStorage};
+#[cfg(feature = "cuda")]
+use crate::cuda_backend::error::WrapErr;
+#[cfg(feature = "cuda")]
+use crate::cuda_backend::CudaStorageSlice;
 use crate::op::{BackpropOp, BinaryOp, CmpOp, Op, ReduceOp, UnaryOp};
 use crate::scalar::TensorOrScalar;
 use crate::shape::{Dim, Dims};
+use crate::CpuStorage;
 use crate::{bail, storage::Storage, DType, Device, Error, Layout, Result, Shape};
-use std::sync::{Arc, RwLock};
 
+use std::sync::{Arc, RwLock};
 /// Unique identifier for tensors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TensorId(usize);
@@ -600,13 +605,74 @@ impl Tensor {
             }
             .bt())?
         }
+        let from_cpu_storage_single = |cpu_storage: &crate::CpuStorage| {
+            let data = S::cpu_storage_as_slice(cpu_storage)?;
+            Ok::<_, Error>(data[0])
+        };
+
         let from_cpu_storage = |cpu_storage: &crate::CpuStorage| {
             let data = S::cpu_storage_as_slice(cpu_storage)?;
             Ok::<_, Error>(data[self.layout().start_offset()])
         };
+
         match &*self.storage() {
             Storage::Cpu(cpu_storage) => from_cpu_storage(cpu_storage),
-            Storage::Cuda(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
+
+            Storage::Cuda(storage) => {
+                if cfg!(feature = "cuda") {
+                    let offset = self.layout().start_offset();
+
+                    // definition of storage.slice is gated by cuda feature
+                    #[cfg(feature = "cuda")]
+                    match &storage.slice {
+                        CudaStorageSlice::BF16(slice) => {
+                            let sub_slice = slice.slice(offset..offset + 1);
+                            let device = slice.device();
+                            let cpu_storage = device.dtoh_sync_copy(&sub_slice).w()?;
+                            return from_cpu_storage_single(&CpuStorage::BF16(cpu_storage));
+                        }
+
+                        CudaStorageSlice::F32(slice) => {
+                            let sub_slice = slice.slice(offset..offset + 1);
+                            let device = slice.device();
+                            let cpu_storage = device.dtoh_sync_copy(&sub_slice).w()?;
+                            return from_cpu_storage_single(&CpuStorage::F32(cpu_storage));
+                        }
+                        CudaStorageSlice::F64(slice) => {
+                            let sub_slice = slice.slice(offset..offset + 1);
+                            let device = slice.device();
+                            let cpu_storage = device.dtoh_sync_copy(&sub_slice).w()?;
+                            return from_cpu_storage_single(&CpuStorage::F64(cpu_storage));
+                        }
+                        CudaStorageSlice::F16(slice) => {
+                            let sub_slice = slice.slice(offset..offset + 1);
+                            let device = slice.device();
+                            let cpu_storage: Vec<half::prelude::f16> =
+                                device.dtoh_sync_copy(&sub_slice).w()?;
+                            return from_cpu_storage_single(&CpuStorage::F16(cpu_storage));
+                        }
+                        CudaStorageSlice::U32(slice) => {
+                            let sub_slice = slice.slice(offset..offset + 1);
+                            let device = slice.device();
+                            let cpu_storage = device.dtoh_sync_copy(&sub_slice).w()?;
+                            return from_cpu_storage_single(&CpuStorage::U32(cpu_storage));
+                        }
+                        CudaStorageSlice::U8(slice) => {
+                            let sub_slice = slice.slice(offset..offset + 1);
+                            let device = slice.device();
+                            let cpu_storage = device.dtoh_sync_copy(&sub_slice).w()?;
+                            return from_cpu_storage_single(&CpuStorage::U8(cpu_storage));
+                        }
+                        CudaStorageSlice::I64(slice) => {
+                            let sub_slice = slice.slice(offset..offset + 1);
+                            let device = slice.device();
+                            let cpu_storage = device.dtoh_sync_copy(&sub_slice).w()?;
+                            return from_cpu_storage_single(&CpuStorage::I64(cpu_storage));
+                        }
+                    }
+                }
+                unreachable!()
+            }
             Storage::Metal(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
         }
     }
