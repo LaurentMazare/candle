@@ -7,5 +7,6 @@
         "candle-pyo3"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "rust-analyzer.cargo.features": ["cuda", "nccl"]
 }

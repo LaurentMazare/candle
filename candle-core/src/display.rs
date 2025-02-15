@@ -3,6 +3,7 @@
 //! This implementation should be in line with the [PyTorch version](https://github.com/pytorch/pytorch/blob/7b419e8513a024e172eae767e24ec1b849976b13/torch/_tensor_str.py).
 //!
 use crate::{DType, Result, Tensor, WithDType};
+use float8::F8E4M3;
 use half::{bf16, f16};
 
 impl Tensor {
@@ -61,6 +62,7 @@ impl std::fmt::Debug for Tensor {
             DType::F16 => self.fmt_dt::<f16>(f),
             DType::F32 => self.fmt_dt::<f32>(f),
             DType::F64 => self.fmt_dt::<f64>(f),
+            DType::F8E4M3 => self.fmt_dt::<F8E4M3>(f),
         }
     }
 }
@@ -493,6 +495,13 @@ impl std::fmt::Display for Tensor {
             }
             DType::F32 => {
                 if let Ok(tf) = FloatFormatter::<f32>::new(&to_display, &po) {
+                    let max_w = tf.max_width(&to_display);
+                    tf.fmt_tensor(self, 1, max_w, summarize, &po, f)?;
+                    writeln!(f)?;
+                }
+            }
+            DType::F8E4M3 => {
+                if let Ok(tf) = FloatFormatter::<F8E4M3>::new(&to_display, &po) {
                     let max_w = tf.max_width(&to_display);
                     tf.fmt_tensor(self, 1, max_w, summarize, &po, f)?;
                     writeln!(f)?;

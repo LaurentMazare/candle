@@ -702,6 +702,18 @@ UPSAMPLE_NEAREST2D_OP(__nv_bfloat16, upsample_nearest2d_bf16)
 IM2COL_OP(__nv_bfloat16, im2col_bf16)
 IM2COL1D_OP(__nv_bfloat16, im2col1d_bf16)
 COL2IM1D_OP(__nv_bfloat16, col2im1d_bf16)
+
+// NOTE: No conv ops for f8
+// CONV1D_OP(__nv_bfloat16, float, conv1d_f8_e5m)
+// CONV2D_OP(__nv_fp8_e4m3, float, conv2d_f8_e5m)
+// CONVT1D_OP(__nv_fp8_e4m3, float, conv_transpose1d_f8_e5m)
+// CONVT2D_OP(__nv_fp8_e4m3, float, conv_transpose2d_f8_e5m)
+// AVG_POOL2D_OP(__nv_fp8_e4m3, float, avg_pool2d_f8_e5m)
+// MAX_POOL2D_OP(__nv_fp8_e4m3, max_pool2d_f8_e5m)
+// UPSAMPLE_NEAREST2D_OP(__nv_fp8_e4m3, upsample_nearest2d_f8_e5m)
+// IM2COL_OP(__nv_fp8_e4m3, im2col_f8_e5m)
+// IM2COL1D_OP(__nv_fp8_e4m3, im2col1d_f8_e5m)
+// COL2IM1D_OP(__nv_fp8_e4m3, col2im1d_f8_e5m)
 #endif
 
 #if __CUDA_ARCH__ >= 530

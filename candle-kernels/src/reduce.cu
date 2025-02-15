@@ -578,6 +578,14 @@ LAYERNORM_OP(__nv_bfloat16, layernorm_bf16)
 ROPE_OP(__nv_bfloat16, rope_bf16, rope_i_bf16, rope_thd_bf16)
 SUM_OP(__nv_bfloat16, sum_bf16)
 FAST_OP(__nv_bfloat16, fast_min_bf16, fast_max_bf16, fast_argmin_bf16, fast_argmax_bf16, fast_sum_bf16)
+
+// NOTE: No reduce ops for f8
+// SUM_OP(__nv_fp8_e4m3, sum_fp8_e4m3)
+// SOFTMAX_OP(__nv_fp8_e4m3, float, softmax_fp8_e4m3)
+// RMSNORM_OP(__nv_fp8_e4m3, rmsnorm_fp8_e4m3)
+// LAYERNORM_OP(__nv_fp8_e4m3, layernorm_fp8_e4m3)
+// ROPE_OP(__nv_fp8_e4m3, rope_fp8_e4m3, rope_i_fp8_e4m3, rope_thd_fp8_e4m3)
+// FAST_OP(__nv_fp8_e4m3, fast_min_fp8_e4m3, fast_max_fp8_e4m3, fast_argmin_fp8_e4m3, fast_argmax_fp8_e4m3, fast_sum_fp8_e4m3)
 #endif
 
 #if __CUDA_ARCH__ >= 530

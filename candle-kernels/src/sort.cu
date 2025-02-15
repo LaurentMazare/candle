@@ -75,6 +75,9 @@ extern "C" __global__ void asort_desc_##RUST_NAME(  \
  
 #if __CUDA_ARCH__ >= 800
 ASORT_OP(__nv_bfloat16, bf16)
+
+// NOTE: No sort ops for f8
+// ASORT_OP(__nv_fp8_e4m3, fp8_e4m3)
 #endif
 
 #if __CUDA_ARCH__ >= 530

@@ -49,6 +49,7 @@ ab_glyph = { workspace = true }
 tracing = { workspace = true }
 tracing-chrome = { workspace = true }
 tracing-subscriber = { workspace = true }
+float8 = { workspace = true }
 # Necessary to disambiguate with tokio in wasm examples which are 1.28.1
 tokio = "1.43.0"
 
@@ -122,3 +123,7 @@ required-features = ["onnx"]
 [[example]]
 name = "colpali"
 required-features = ["pdf2image"]
+
+[[example]]
+name = "deepseekv3"
+required-features = ["cuda", "nccl"]
