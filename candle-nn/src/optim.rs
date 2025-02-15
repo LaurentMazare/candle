@@ -1,20 +1,34 @@
 //! Various optimization algorithms.
+//!
+//! This contains to major traits: `Optimizer` and `Scheduler`. The `Optimizer` is designed to contain
+//! the `Scheduler`, and handles the process of actually doing the optimization. In contrast,
+//! the `Scheduler` purely focuses on the learning rate.
+
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
+
 use candle::{Result, Tensor, Var};
 
-/// The interface optimizers should implement.
+/// The trait optimizers should implement.
 pub trait Optimizer: Sized {
+    type SchedulerOutput: Sized;
     type Config: Sized;
 
-    fn new(vars: Vec<Var>, config: Self::Config) -> Result<Self>;
+    fn new(
+        vars: Vec<Var>,
+        scheduler: Arc<Mutex<dyn Scheduler<Output = Self::SchedulerOutput>>>,
+        config: Self::Config,
+    ) -> Result<Self>;
 
     fn step(&mut self, grads: &candle::backprop::GradStore) -> Result<()>;
 
-    fn learning_rate(&self) -> f64;
-
-    fn set_learning_rate(&mut self, lr: f64);
-
-    fn empty(config: Self::Config) -> Result<Self> {
-        Self::new(vec![], config)
+    fn empty(
+        scheduler: Arc<Mutex<dyn Scheduler<Output = Self::SchedulerOutput>>>,
+        config: Self::Config,
+    ) -> Result<Self> {
+        Self::new(vec![], scheduler, config)
     }
 
     fn backward_step(&mut self, loss: &Tensor) -> Result<()> {
@@ -22,9 +36,61 @@ pub trait Optimizer: Sized {
         self.step(&grads)
     }
 
-    fn from_slice(vars: &[&Var], config: Self::Config) -> Result<Self> {
+    fn from_slice(
+        vars: &[&Var],
+        scheduler: Arc<Mutex<dyn Scheduler<Output = Self::SchedulerOutput>>>,
+        config: Self::Config,
+    ) -> Result<Self> {
         let vars: Vec<_> = vars.iter().map(|&v| v.clone()).collect();
-        Self::new(vars, config)
+        Self::new(vars, scheduler, config)
+    }
+}
+
+/// A trait to abstract schedulers.
+pub trait Scheduler: Debug {
+    type Output: Sized;
+
+    fn step(&mut self) -> Result<Self::Output>;
+}
+
+/// A trait to simplify construction of schedulers.
+pub trait SchedulerCreator: Debug {
+    type Config: Sized;
+    type Output: Sized;
+
+    fn new(config: Self::Config) -> Result<Arc<Mutex<dyn Scheduler<Output = Self::Output>>>>;
+}
+
+macro_rules! get_scheduler {
+    ($thing:expr) => {
+        loop {
+            if let Ok(inner) = $thing.try_lock() {
+                break inner;
+            }
+        }
+    };
+}
+
+/// A scheduler which maintains a static learning rate.
+#[derive(Debug)]
+pub struct ConstantScheduler {
+    lr: f64,
+}
+
+impl Scheduler for ConstantScheduler {
+    type Output = f64;
+
+    fn step(&mut self) -> Result<f64> {
+        Ok(self.lr)
+    }
+}
+
+impl SchedulerCreator for ConstantScheduler {
+    type Config = f64;
+    type Output = f64;
+
+    fn new(lr: Self::Config) -> Result<Arc<Mutex<dyn Scheduler<Output = Self::Output>>>> {
+        Ok(Arc::new(Mutex::new(Self { lr })))
     }
 }
 
@@ -34,38 +100,34 @@ pub trait Optimizer: Sized {
 #[derive(Debug)]
 pub struct SGD {
     vars: Vec<Var>,
-    learning_rate: f64,
+    scheduler: Arc<Mutex<dyn Scheduler<Output = f64>>>,
 }
 
 impl Optimizer for SGD {
-    type Config = f64;
+    type SchedulerOutput = f64;
+    type Config = ();
 
-    fn new(vars: Vec<Var>, learning_rate: f64) -> Result<Self> {
+    fn new(
+        vars: Vec<Var>,
+        scheduler: Arc<Mutex<dyn Scheduler<Output = f64>>>,
+        _: (),
+    ) -> Result<Self> {
         let vars = vars
             .into_iter()
             .filter(|var| var.dtype().is_float())
             .collect();
-        Ok(Self {
-            vars,
-            learning_rate,
-        })
-    }
-
-    fn learning_rate(&self) -> f64 {
-        self.learning_rate
+        Ok(Self { vars, scheduler })
     }
 
     fn step(&mut self, grads: &candle::backprop::GradStore) -> Result<()> {
+        let mut scheduler = get_scheduler!(self.scheduler);
+        let lr = scheduler.step()?;
         for var in self.vars.iter() {
             if let Some(grad) = grads.get(var) {
-                var.set(&var.sub(&(grad * self.learning_rate)?)?)?;
+                var.set(&var.sub(&(grad * lr)?)?)?;
             }
         }
         Ok(())
-    }
-
-    fn set_learning_rate(&mut self, lr: f64) {
-        self.learning_rate = lr
     }
 }
 
@@ -79,24 +141,76 @@ impl SGD {
     }
 }
 
+/// Parameters for the AdamW scheduler.
 #[derive(Clone, Debug)]
-pub struct ParamsAdamW {
+pub struct SchedulerParamsAdamW {
     pub lr: f64,
     pub beta1: f64,
     pub beta2: f64,
-    pub eps: f64,
     pub weight_decay: f64,
 }
 
-impl Default for ParamsAdamW {
+impl Default for SchedulerParamsAdamW {
     fn default() -> Self {
         Self {
             lr: 0.001,
             beta1: 0.9,
             beta2: 0.999,
-            eps: 1e-8,
             weight_decay: 0.01,
         }
+    }
+}
+
+/// Parameters for the AdamW optimizer.
+#[derive(Clone, Debug)]
+pub struct ParamsAdamW {
+    pub eps: f64,
+}
+
+impl Default for ParamsAdamW {
+    fn default() -> Self {
+        Self { eps: 1e-8 }
+    }
+}
+
+/// A scheduler for AdamW.
+#[derive(Debug)]
+pub struct AdamWScheduler {
+    params: SchedulerParamsAdamW,
+}
+
+#[derive(Debug)]
+pub struct AdamWSchedulerOutput {
+    pub lr: f64,
+    pub lr_lambda: f64,
+    pub beta1: f64,
+    pub beta2: f64,
+}
+
+impl Scheduler for AdamWScheduler {
+    type Output = AdamWSchedulerOutput;
+
+    fn step(&mut self) -> Result<AdamWSchedulerOutput> {
+        let lr = self.params.lr;
+        let lambda = self.params.weight_decay;
+        let lr_lambda = lr * lambda;
+        let beta1 = self.params.beta1;
+        let beta2 = self.params.beta2;
+        Ok(AdamWSchedulerOutput {
+            lr,
+            lr_lambda,
+            beta1,
+            beta2,
+        })
+    }
+}
+
+impl SchedulerCreator for AdamWScheduler {
+    type Config = SchedulerParamsAdamW;
+    type Output = AdamWSchedulerOutput;
+
+    fn new(params: Self::Config) -> Result<Arc<Mutex<dyn Scheduler<Output = Self::Output>>>> {
+        Ok(Arc::new(Mutex::new(Self { params })))
     }
 }
 
@@ -111,13 +225,19 @@ struct VarAdamW {
 pub struct AdamW {
     vars: Vec<VarAdamW>,
     step_t: usize,
+    scheduler: Arc<Mutex<dyn Scheduler<Output = AdamWSchedulerOutput>>>,
     params: ParamsAdamW,
 }
 
 impl Optimizer for AdamW {
+    type SchedulerOutput = AdamWSchedulerOutput;
     type Config = ParamsAdamW;
 
-    fn new(vars: Vec<Var>, params: ParamsAdamW) -> Result<Self> {
+    fn new(
+        vars: Vec<Var>,
+        scheduler: Arc<Mutex<dyn Scheduler<Output = AdamWSchedulerOutput>>>,
+        params: ParamsAdamW,
+    ) -> Result<Self> {
         let vars = vars
             .into_iter()
             .filter(|var| var.dtype().is_float())
@@ -136,26 +256,20 @@ impl Optimizer for AdamW {
             .collect::<Result<Vec<_>>>()?;
         Ok(Self {
             vars,
-            params,
             step_t: 0,
+            scheduler,
+            params,
         })
-    }
-
-    fn learning_rate(&self) -> f64 {
-        self.params.lr
-    }
-
-    fn set_learning_rate(&mut self, lr: f64) {
-        self.params.lr = lr
     }
 
     fn step(&mut self, grads: &candle::backprop::GradStore) -> Result<()> {
         self.step_t += 1;
-        let lr = self.params.lr;
-        let lambda = self.params.weight_decay;
-        let lr_lambda = lr * lambda;
-        let beta1 = self.params.beta1;
-        let beta2 = self.params.beta2;
+        let AdamWSchedulerOutput {
+            lr,
+            lr_lambda,
+            beta1,
+            beta2,
+        } = get_scheduler!(self.scheduler).step()?;
         let scale_m = 1f64 / (1f64 - beta1.powi(self.step_t as i32));
         let scale_v = 1f64 / (1f64 - beta2.powi(self.step_t as i32));
         for var in self.vars.iter() {
@@ -184,11 +298,18 @@ impl Optimizer for AdamW {
 
 impl AdamW {
     pub fn new_lr(vars: Vec<Var>, learning_rate: f64) -> Result<Self> {
-        let params = ParamsAdamW {
+        let params = ParamsAdamW::default();
+        let scheduler_params = SchedulerParamsAdamW {
             lr: learning_rate,
-            ..ParamsAdamW::default()
+            ..SchedulerParamsAdamW::default()
         };
-        Self::new(vars, params)
+        Self::new(
+            vars,
+            Arc::new(Mutex::new(AdamWScheduler {
+                params: scheduler_params,
+            })),
+            params,
+        )
     }
 
     pub fn params(&self) -> &ParamsAdamW {

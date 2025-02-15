@@ -5,7 +5,11 @@ extern crate intel_mkl_src;
 extern crate accelerate_src;
 
 use candle::{DType, Device, Result, Tensor};
-use candle_nn::{linear, AdamW, Linear, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
+use candle_nn::{
+    linear,
+    optim::{AdamWScheduler, SchedulerCreator, SchedulerParamsAdamW},
+    AdamW, Linear, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap,
+};
 
 fn gen_data() -> Result<(Tensor, Tensor)> {
     // Generate some sample linear data.
@@ -24,11 +28,15 @@ fn main() -> Result<()> {
     let varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
     let model = linear(2, 1, vb.pp("linear"))?;
-    let params = ParamsAdamW {
+
+    let scheduler_params = SchedulerParamsAdamW {
         lr: 0.1,
         ..Default::default()
     };
-    let mut opt = AdamW::new(varmap.all_vars(), params)?;
+    let scheduler = AdamWScheduler::new(scheduler_params)?;
+    let params = ParamsAdamW::default();
+    let mut opt = AdamW::new(varmap.all_vars(), scheduler, params)?;
+
     for step in 0..10000 {
         let ys = model.forward(&sample_xs)?;
         let loss = ys.sub(&sample_ys)?.sqr()?.sum_all()?;
