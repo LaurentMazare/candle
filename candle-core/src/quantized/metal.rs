@@ -126,6 +126,23 @@ impl QMetalStorage {
         Ok(())
     }
 
+    pub fn quantize_onto(&mut self, src: &crate::CpuStorage) -> Result<()> {
+        // Quantization only happens on CPU for now.
+        let elem_count = src.as_slice::<f32>()?.len();
+        let src = crate::Storage::Cpu(src);
+        let mut qcpu_storage = crate::Device::Cpu.qzeros(elem_count, self.dtype)?;
+
+        if let QStorage::Cpu(storage) = &mut qcpu_storage {
+            storage.from_float(src.as_slice::<f32>()?)?;
+        } else {
+            unreachable!()
+        }
+
+        let buffer = self.device.new_buffer_with_data(&qcpu_storage.data()?)?;
+        self.buffer = buffer;
+        Ok(())
+    }
+
     pub fn storage_size_in_bytes(&self) -> usize {
         self.buffer.length() as usize
     }

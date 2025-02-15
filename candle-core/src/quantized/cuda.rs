@@ -471,6 +471,23 @@ impl QCudaStorage {
         Ok(())
     }
 
+    pub fn quantize_onto(&mut self, src: &crate::CpuStorage) -> Result<()> {
+        // Run the quantization on cpu.
+        let src_len = src.as_slice::<f32>()?.len();
+        let mut qcpu_storage = crate::Device::Cpu.qzeros(src_len, self.dtype)?;
+
+        if let QStorage::Cpu(storage) = &mut qcpu_storage {
+            storage.from_float(src.as_slice::<f32>()?)?;
+        } else {
+            unreachable!()
+        }
+
+        let data = qcpu_storage.data()?;
+        let data = self.device.htod_sync_copy(data.as_ref()).w()?;
+        self.data = data;
+        Ok(())
+    }
+
     pub fn storage_size_in_bytes(&self) -> usize {
         self.data.len
     }
