@@ -21,7 +21,10 @@ impl BenchDevice for Device {
             Device::Cpu => Ok(()),
             Device::Cuda(device) => {
                 #[cfg(feature = "cuda")]
-                return Ok(device.synchronize()?);
+                {
+                    use candle_core::cuda::WrapErr;
+                    return Ok(device.synchronize().w()?);
+                }
                 #[cfg(not(feature = "cuda"))]
                 panic!("Cuda device without cuda feature enabled: {:?}", device)
             }
