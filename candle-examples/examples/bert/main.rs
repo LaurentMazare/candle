@@ -88,7 +88,7 @@ impl Args {
         if self.approximate_gelu {
             config.hidden_act = HiddenAct::GeluApproximate;
         }
-        let model = BertModel::load(vb, &config)?;
+        let model = BertModel::load(vb, &config, false)?;
         Ok((model, tokenizer))
     }
 }

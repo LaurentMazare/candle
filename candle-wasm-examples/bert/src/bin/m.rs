@@ -22,7 +22,7 @@ impl Model {
         let config: Config = serde_json::from_slice(&config)?;
         let tokenizer =
             Tokenizer::from_bytes(&tokenizer).map_err(|m| JsError::new(&m.to_string()))?;
-        let bert = BertModel::load(vb, &config)?;
+        let bert = BertModel::load(vb, &config, false)?;
 
         Ok(Self { bert, tokenizer })
     }
