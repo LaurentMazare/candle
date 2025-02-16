@@ -72,6 +72,45 @@ impl Module for Linear {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct BitLinear {
+    inner: candle_nn::BitLinear,
+    span: tracing::Span,
+}
+
+impl BitLinear {
+    pub fn from_weights(weights: Tensor, bias: Option<Tensor>) -> Self {
+        let inner = candle_nn::BitLinear::new(weights, bias);
+        let span = tracing::span!(tracing::Level::TRACE, "bit_linear");
+        Self { inner, span }
+    }
+}
+
+pub fn bit_linear_b(d1: usize, d2: usize, b: bool, vb: VarBuilder) -> Result<BitLinear> {
+    let inner = candle_nn::bit_linear_b(d1, d2, b, vb)?;
+    let span = tracing::span!(tracing::Level::TRACE, "bit_linear");
+    Ok(BitLinear { inner, span })
+}
+
+pub fn bit_linear(d1: usize, d2: usize, vb: VarBuilder) -> Result<BitLinear> {
+    let inner = candle_nn::bit_linear(d1, d2, vb)?;
+    let span = tracing::span!(tracing::Level::TRACE, "bit_linear");
+    Ok(BitLinear { inner, span })
+}
+
+pub fn bit_linear_no_bias(d1: usize, d2: usize, vb: VarBuilder) -> Result<BitLinear> {
+    let inner = candle_nn::bit_linear_no_bias(d1, d2, vb)?;
+    let span = tracing::span!(tracing::Level::TRACE, "bit_linear");
+    Ok(BitLinear { inner, span })
+}
+
+impl Module for BitLinear {
+    fn forward(&self, xs: &Tensor) -> Result<Tensor> {
+        let _enter = self.span.enter();
+        self.inner.forward(xs)
+    }
+}
+
 // Wrap the conv2d op to provide some tracing.
 #[derive(Debug, Clone)]
 pub struct Conv2d {
